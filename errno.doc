@@ -1,0 +1,37 @@
+on success the infector returns 0, otherwise it returns one of the follwing values (refer to the source code for a list of the actual values of each macro):
+
+ERR_BAD_USAGE
+	argc was less than 3
+
+ERR_BAD_OPEN
+	a failure encountered in sys_open syscall
+
+ERR_BAD_FSTAT
+	a failure encountered in sys_fstat syscall
+
+ERR_EMPTY_FILE
+	either the pivot file or payload file are empty
+
+ERR_NOT_TARGET
+	the pivot file is not a 32 bit elf with little endian architecture
+
+ERR_BAD_MMAP
+	a failure encountered is sys_mmapp_pgoff syscall
+	
+ERR_INFECTED
+	the pivot file is already infected
+
+ERR_NO_SHELL
+	the pivot file is stripped
+
+ERR_NO_MARKER
+	the payload file doesn't have a 0x69696969 DWORD
+
+ERR_NO_XL_SEG
+	couldn't file a segment that is both executable and loadable, this shouldn't be returned except for weird files that was manually modified, if you get this error while normal executable files please contact the devolopper
+
+ERR_NO_GAP
+	no gap was found, either the payload is too big, or the pivot has really small gaps (like the 32 bit version of /bin/ls), this should happen a lot while trying to infect small. however a new infector will be uploaded here soon which should solve this problem in most cases, the only solution for now is re-try with a smaller payload
+
+
+this was put here to provide and ABI after turning this code into a position independent one and use it with a loader or so, however I won't be doing this any time soon if I did it at all, you're very welcome to help 
