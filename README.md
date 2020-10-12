@@ -15,6 +15,10 @@ there is only requirement, the payload should contains a DWORD value of 0x696969
 
 refer to payload1.s and payload2.s to get an idea of what an accepted payload should look like
 
+## quick demo
+
+![](demo.gif)
+
 ## a special thanks
 
 to pico (0x00pf) for his [original write up](https://0x00sec.org/t/elfun-file-injector/410) on elf file infection
