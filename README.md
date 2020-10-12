@@ -7,6 +7,8 @@ a basic x86 elf file infector written in pure x86 assembly
 
 ## assembling command
 
+use this to assemble both the pivot and the payload file
+
 `nasm -f elf infect.s -o infect.o &&  ld -m elf_i386 infect.o -o infect && rm infect.o`
 
 ## requirements
@@ -15,7 +17,7 @@ there are 2 requirements for the payload, to be postion independent, and to cont
 
 now the payload doesn't have to be null-byte-free but that's preferable as it helps to generate a smaller code
 
-refer to payload.s to get an idea of what an accepted payload should look like
+refer to elf.s to get an idea of what an accepted payload should look like
 
 ## quick demo
 
