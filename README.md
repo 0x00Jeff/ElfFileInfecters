@@ -3,7 +3,7 @@ a collection of elf file infectors
 
 ## infect.s
 
-a basic x86 elf file infector in pure x86 assembly which can be assembled with the following command
+a basic x86 elf file infector written in pure x86 assembly
 
 ## assembling command
 
