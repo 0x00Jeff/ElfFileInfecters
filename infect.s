@@ -1,4 +1,4 @@
-;openx flag value
+;open flag value
 %define O_RDONLY 0
 %define O_RDWR 2
 
