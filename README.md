@@ -19,6 +19,7 @@ now the payload doesn't have to be null-byte-free but that's preferable as it he
 refer to elf.s to get an idea of what an accepted payload should look like
 
 ## quick demo
+note : the payload segfaults because it's trying to return to `0x69696969` which is not a valid address, refer to `elf.s` to view the source code
 
 ![](demo.gif)
 
