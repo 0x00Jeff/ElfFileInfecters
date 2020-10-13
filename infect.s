@@ -134,11 +134,6 @@ section .data
 	no_marker db "no mark was found, make sure you follow the expectations at the Readme file!", 0x0a, 0x00
 	no_marker_len equ $ - no_marker
 
-	; was the executable segment found ?
-	found_executable_segment db "the executable segment was found!", 0x0a, 0x00
-	found_executable_segment_len equ $ - found_executable_segment
-
-
 	; was any gap found ?
 	no_gap_found db "no gap was found :(", 0x0a, 0x00
 	no_gap_found_len equ $ - no_gap_found
@@ -269,8 +264,8 @@ mapping:
 	cmp eax, -1
 	; if we jumped to mmap_err we have to figure out if we mapped any of the files correctly so
 	; we know if we should unmap them before exiting, for that I'll use ebx
-	; pivot wasn't mapped -> ebx = 0
-	; elf wasn't mapped -> ebx = 1
+	; pivot wasn't mapped -> ebx = 1
+	; elf wasn't mapped -> ebx = 0
 	jne next_map
 	xor ebx, ebx
 	jmp mmap_err
