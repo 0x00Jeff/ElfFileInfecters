@@ -1,3 +1,4 @@
+- re-check error paths (except for open's and unmap's, those are working just fine)
 - optimize the original infecter 
 - write a 64 version
 - figure out a way to make it support both 32 and 64 elf files without writing every routine twice
