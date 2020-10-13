@@ -1,12 +1,14 @@
 # infect.s
 
-a basic x86 elf file infector written in pure x86 assembly
+a basic x86 elf file infector written in pure x86 assembly targetting 32 bit Linux executables
 
 ## assembling command
 
 use this to assemble both the pivot and the payload file
 
-`nasm -f elf infect.s -o infect.o &&  ld -m elf_i386 infect.o -o infect && rm infect.o`
+pivot file : `nasm -f elf infect.s -o infect.o &&  ld -m elf_i386 infect.o -o infect && rm infect.o`
+
+payload file : `nasm -f elf elf.s -o elf.o &&  ld -m elf_i386 elf.o -o elf && rm elf.o`
 
 ## requirements
 
