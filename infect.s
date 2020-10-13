@@ -333,13 +333,11 @@ finding_shellcode:
 	push eax
 	push shellcode_size
 	call find_shell ; returns a pointer to the .text sections, and initializes the shellcode_size variable
+	mov [shellcode], eax
 	test eax, eax	; shell = NULL ?
-	jne next3
+	jne ptaching
 	push ERR_NO_SHELL
 	jmp clean
-
-next3:
-	mov [shellcode], eax
 
 patching:
 	push eax; shellcode
