@@ -1,6 +1,6 @@
-- change next4: label with a more meaningful name (smtg like copyying_shell) next time I edit the code
+- change next4: label with a more meaningful name (smtg like copying_shell:) next time I edit the code
 - document the undocumented routines next time I edit the code
-- change the the 2nd "copying shell" ine output to someting else then update the demo.gif
+- change the the 2nd "copying shell" in output to someting else next time I edit the code then update the demo.gif
 - re-check error paths (except for open's and unmap's, those are working just fine)
 - optimize the original infecter 
 - write a 64 version
