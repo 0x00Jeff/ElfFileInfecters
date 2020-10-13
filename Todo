@@ -2,7 +2,7 @@
 - document the undocumented routines next time I edit the code
 - rename elf.s to payload.s and apply the change to the readme file and the gif, also add instructions on how to assemble it as well
 - change the the 2nd "copying shell" in output to someting else next time I edit the code then update the demo.gif
-- re-check error paths (except for open's and unmap's, those are working just fine)
+- re-check error paths (except for open's and unmap's, those are working just fine) e.g go the debugger, make eax = -1 after each routine call and see if the infecter would segfault duo to some bad stack cleaning or not clean the resouces that it should be cleaning ( e.i calling close() and unmap() ) 
 - optimize the original infecter 
 - write a 64 version
 - figure out a way to make it support both 32 and 64 elf files without writing every routine twice
