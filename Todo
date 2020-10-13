@@ -1,3 +1,5 @@
+- change next4: label with a more meaningful name (smtg like copyying_shell) next time I edit the code
+- document the undocumented routines next time I edit the code
 - re-check error paths (except for open's and unmap's, those are working just fine)
 - optimize the original infecter 
 - write a 64 version
