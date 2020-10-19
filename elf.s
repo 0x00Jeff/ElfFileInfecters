@@ -3,6 +3,7 @@ section .text
 
 _start:
 	pushad ; saving all general purpose registers so we can restore them later, failing to do so will cause the original executable to crash
+
 	xor eax, eax
 	xor ebx, ebx
 	mov edx, esp

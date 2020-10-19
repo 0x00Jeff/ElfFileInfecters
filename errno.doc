@@ -1,3 +1,5 @@
+this was put here to provide and ABI after turning this code into a position independent one and use it with a loader or so, however I won't be doing this any time soon if I did it at all, you're very welcome to help 
+
 on success the infector returns 0, otherwise it returns one of the follwing values (refer to the source code for a list of the actual values of each macro):
 
 ERR_BAD_USAGE
@@ -33,5 +35,3 @@ ERR_NO_XL_SEG
 ERR_NO_GAP
 	no gap was found, either the payload is too big, or the pivot has really small gaps (like the 32 bit version of /bin/ls), this should happen a lot while trying to infect small. however a new infector will be uploaded here soon which should solve this problem in most cases, the only solution for now is re-try with a smaller payload
 
-
-this was put here to provide and ABI after turning this code into a position independent one and use it with a loader or so, however I won't be doing this any time soon if I did it at all, you're very welcome to help 
