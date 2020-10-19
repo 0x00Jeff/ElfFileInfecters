@@ -1,6 +1,6 @@
 # infect.s
 
-a basic x86 elf file infector written in pure x86 assembly targetting 32 bit Linux executables
+a basic x86 elf file infector written in pure x86 assembly targetting 32 bit Linux executables, using the Segment padding infection thechnique along with finding in-segment null-byte blocks
 
 ## assembling command
 
