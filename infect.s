@@ -299,9 +299,6 @@ after_mapping:
 	call is_target_elf	; returns -1 for false, 0 for true
 	je checking_infection
 
-	push bad_32_bit_elf
-	push bad_32_bit_elf_len
-	call print
 	push ERR_NOT_TARGET
 	jmp clean
 
@@ -978,7 +975,7 @@ is_target_elf: 	; int is_target_elf(void *data)
 
 	mov eax, [ebp + 0x8] ; mapped date
 	; checking the magic bytes
-	cmp dword[eax], 0x464c457f ; "\x7f" + "ELF"
+	cmp dword[eax], 0x464c457f ; '\x7f' + "ELF"
 	je good_elf_ptr
 
 	push bad_elf
@@ -989,9 +986,6 @@ is_target_elf: 	; int is_target_elf(void *data)
 	jmp ret_arch
 
 good_elf_ptr:
-;	push good_elf
-;	push good_elf_len
-;	call print ; "file is indeed an elf"
 	; checking e_ident[ELFCLASS] ; eax still has the pointer to the mapped data
 	add eax, 4
 	cmp byte[eax], ELFCLASS32
@@ -1000,14 +994,11 @@ good_elf_ptr:
 	push bad_32_bit_elf
 	push bad_32_bit_elf_len
 	call print
-	add esp, 16
+	add esp, 8
 	mov eax, -1
 	jmp ret_arch
 
 is_32_bit:
-	;push good_32_bit_elf
-	;push good_32_bit_elf_len
-	call print ; file is a 32 bit elf
 	xor eax, eax
 
 ret_arch:
