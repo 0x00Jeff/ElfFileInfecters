@@ -69,7 +69,7 @@ section .data
 	bad_mmap_len equ $ - bad_mmap
 
 	; is 32 bit elf ?
-	bad_32_bit_elf db "file is not a 32 bit elf!", 0x0a, 0x00
+	bad_32_bit_elf db "one of the files is not a 32 bit elf!", 0x0a, 0x00
 	bad_32_bit_elf_len equ $ - bad_32_bit_elf
 
 	; is 64 bit elf ?
