@@ -1,5 +1,5 @@
 %include "include/shared.s"
-			;optional TODO's lines: 106, 136, 258, 326
+			; optional TODO's lines: 106, 136, 258, 326
 			; todo's lines : 433
 STRUC	stat
 	before_size:	resb	20 	; the other elements don't really matter in this context, we just need
