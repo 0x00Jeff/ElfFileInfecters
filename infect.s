@@ -712,7 +712,6 @@ no_text_section:
 
 found_text_section:;
 	;storing the address of the section header
-<<<<<<< HEAD
 	mov eax, edi			; the section header pointer
 	mov eax, [edi + sh_offset] 	; the actual section offset
 	add eax, ebx			; ebx still contains the mmap memory base ; this eax will be returned to 
@@ -898,11 +897,22 @@ good_elf_ptr:
 	push bad_32_bit_elf_len
 	call print		; "file is not 32 bit"
 	add esp, 8
-	mov eax, -1
+	mov eax, -1		; the return value
 	jmp ret_arch
 
 is_32_bit:
+	inc eax
+	cmp byte[eax], LITTLE
+	jne bad_little_endian
 	xor eax, eax		; the return value
+	jmp ret_arch
+
+bad_little_endian:
+	push bad_l_endian
+	push bad_l_endian_len
+	call print
+	add esp, 8
+	mov eax, -1		; the return value
 
 ret_arch:
 	pop ebp

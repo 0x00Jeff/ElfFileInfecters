@@ -16,6 +16,9 @@
 %define ELFCLASS32 1 ; 32 bit elf
 %define ELFCLASS64 2 ; 64 bit elf
 
+;EI_DATA values (endianess)
+%define LITTLE	1
+
 ;size of e_ident array
 %define ident_size 16
 
@@ -75,6 +78,10 @@ section .data
 	; is 64 bit elf ?
 	bad_64_bit_elf db "file is not a 64 bit elf!", 0x0a, 0x00
 	bad_64_bit_elf_len equ $ - bad_64_bit_elf
+
+	; is little endian ?
+	bad_l_endian db "one of the elf files is not little endian!", 0x0a, 0x00
+	bad_l_endian_len equ $ - bad_l_endian
 
 	; is already infected ?
 	infected db " is already infected :-)", 0x0a, 0x00
