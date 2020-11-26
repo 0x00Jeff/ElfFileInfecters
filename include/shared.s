@@ -68,7 +68,7 @@ section .data
 	empty_file_len equ $ - empty_file
 
 	; is mapped correctly ?
-	bad_mmap db "couldn't mmap file!", 0x0a, 0x00
+	bad_mmap db "couldn't map file!", 0x0a, 0x00
 	bad_mmap_len equ $ - bad_mmap
 
 	; is 32 bit elf ?
