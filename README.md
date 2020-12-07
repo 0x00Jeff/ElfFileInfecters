@@ -2,28 +2,30 @@
 
 a basic x86 elf file infector written in pure x86 assembly, using the Segment padding infection thechnique along with finding in-segment null-byte blocks
 
-## assembling command
+## assembling commands
 
-pivot file
+first you want to `. asmrc` or append the content of that file to your `~/.bashrc` or `~/.zshrc` or whatever file your shell uses
+
+then build the infector executable using
+
 ```
-nasm -f elf infect.s -o infect.o &&  ld -m elf_i386 infect.o -o infect && rm infect.o
+asm infect.s
 ```
 
-payload file
+and the payload file using
+
 ```
-nasm -f elf elf.s -o elf.o &&  ld -m elf_i386 elf.o -o elf && rm elf.o
+asm elf.s
 ```
 
 ## requirements
 
-there are 2 requirements for the payload, to be postion independent, and to contain a DWORD value of 0x69696969 inside of it, or else the infection won't happen, this is because the executable needs a known value that can be replaced with the original pivot file's entry point, so we can continue executing the pivot file normally after executing the injected payload
+there are 2 requirements for the payload, to be postion independent, and to contain a DWORD value of 0x69696969 inside of it, or else the infection won't happen
 
-now the payload doesn't have to be null-byte-free but that's preferable as it helps to generate a smaller code
-
-refer to elf.s to get an idea of what an accepted payload should look like
+now the payload doesn't have to be null-byte-free but that's preferable as it helps to generate a smaller code, refer to elf.s to get an idea of what an accepted payload should look like
 
 ## quick demo
-note : the payload segfaults because it's trying to return to `0x69696969` which is not a valid address, refer to `elf.s` to view the source code
+note : the payload segfaults because it's trying to return to `0x69696969` which is not a valid address
 
 ![](demo.gif)
 
@@ -32,8 +34,7 @@ note : the payload segfaults because it's trying to return to `0x69696969` which
 - document the undocumented routines
 - rename elf.s to payload.s and apply the change to the readme file and the gif
 - make a better demo.gif
-- re-check error paths from next_size: onwards  e.g go the debugger, make eax = -1 after each routine call and see if the infecter would segfault duo to some bad stack cleaning or not clean the resouces that it should be cleaning ( e.i calling close() and unmap() ) 
-- optimize the original infecter 
+- <del>optimize</del> keep optimizing the original infecter 
 - write a 64 version
 - figure out a way to make it support both 32 and 64 elf files without writing every routine twice
 - make it position indepedent then get rid of the null bytes (probably won't do this one)

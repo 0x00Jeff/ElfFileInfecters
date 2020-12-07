@@ -1,6 +1,10 @@
+;file descriptors
+%define STDOUT		1
+%define	STDERR		2
+
 ;open flag value
-%define O_RDONLY 0
-%define O_RDWR 2
+%define O_RDONLY	0
+%define O_RDWR		2
 
 ;mmap flags
 %define MAP_SHARED	1
@@ -28,7 +32,7 @@
 ;segment header flags
 %define PF_X 1
 
-; errno values
+;errno values
 %define SUCCESS		0
 %define	ERR_BAD_USAGE	1
 %define	ERR_BAD_OPEN	2
