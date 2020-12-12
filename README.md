@@ -1,3 +1,5 @@
+## this is just a dev branch of the 64 bit version of the infector, if you came here to use this tool, you should get it from the [master branch](https://github.com/0x00Jeff/ElfFileInfecters)
+
 # infect.s
 
 a basic x86 elf file infector written in pure x86 assembly, using the Segment padding infection thechnique along with finding in-segment null-byte blocks
