@@ -550,14 +550,13 @@ method1:	; checking between-segments gaps, this should work most of the time duo
 method2:	; checking the in-segment 0-blocks
 	xor eax, eax			; the size of the current gap
 	mov ebx, [ebp + 0xc]		; segment header file
+	mov edx, [ebx + p_filesz]	; segment size
 
-	mov ebx, [ebx + p_offset]
+	mov ebx, [ebx + p_offset]	; segment data in file
+	mov ecx, -1			; the loop counter
 	add ebx, [ebp + 0x10]		; segment data in memorry
 
-	mov ecx, -1			; the loop counter
 
-	mov edx, [ebp + 0x10]
-	mov edx, [edx + p_filesz]	; segment size
 
 parsing_data:
 	inc ecx				; ++i

@@ -526,13 +526,13 @@ method1:	; checking between-segments gaps, this should work most of the time duo
 method2:	; checking the in-segments 0-blocks
 	xor eax, eax			; the size of the current gap
 	mov rbx, r12			; void *segment in memorry
+	mov rdx, [r12 + p_filesz]	; segment size
 
 	add rbx, [r12 + p_offset]
+	mov rcx, -1			; the loop counter
 	add rbx, r11			; the segment address in memorry
 
-	mov rcx, -1			; the loop counter
 
-	mov rdx, [r12 + p_filesz]	; segment size
 
 parsing_data:
 	inc rcx				; ++i
