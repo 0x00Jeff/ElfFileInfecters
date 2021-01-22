@@ -12,6 +12,8 @@
 ; TODO : do the same with every other %definition in the include file (such as MAP_SHARED)
 
 ; TODO : both filed should be MAP_PRIVATE in mmap:
+			; TODO : PROBLEM -> mmap doesn't work, double check the parametres, and ommit the null-byte-free writing style
+			; ommit the null-byte-free coding style on both this version and the 32 bit one
 
 STRUC	stat
 	before_size:	resb	48
@@ -406,7 +408,6 @@ clean:
 
 open:	; int open(char *file, int flags);
 
-	push rax
 	push rdi
 	push rsi
 	;
@@ -442,7 +443,7 @@ mmap:	; void* mmap(QWORD size, int flags, int fd);
 	jne ret_mmap
 
 mapping_error:
-	mov eax, -1			; TODO : replace with rax ?
+	mov rax, -1			; TODO : replace with rax ?
 	mov r11d, STDOUT
 	mov r12, bad_mmap
 	mov r13d, bad_mmap_len
@@ -648,7 +649,7 @@ find_shell:	; void *find_shell(void *data, size_t shellcode_size); returns a poi
 
 	;; getting a pointer to the string table section into rdx
 	mov ax, word[r11 + e_shstrndx]
-	movxz eax, aax
+	movzx eax, ax
 	mov ecx, Elf64_Shdr_size
 	mul cx				; rax now has the string table section header offset in file, and rdx
 					; has the sections base in memorry
@@ -662,7 +663,7 @@ find_shell:	; void *find_shell(void *data, size_t shellcode_size); returns a poi
 
 	; parsing the sections and returning the address of .text
 
-	mov cx, [r11 + s_shnum]
+	mov cx, [r11 + e_shnum]
 	movzx ecx, cx
 
 	; saving r11 and r12 as they will be used to pass arguments to strcmp in a bit 
@@ -679,7 +680,7 @@ parsing_loop:
 	call strcmp
 
 	test eax, eax
-	je found_section
+	je found_text_section
 	; section++
 	add rdi, Elf64_Shdr_size
 
@@ -715,7 +716,7 @@ ret_text_section:
 	pop rcx
 	pop rbx
 	;
-	pop ebp
+	pop rbp
 	ret	
 
 unmap:	; void unmap(void *data, size_t size);
