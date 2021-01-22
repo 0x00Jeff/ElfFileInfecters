@@ -12,8 +12,8 @@
 ; TODO : do the same with every other %definition in the include file (such as MAP_SHARED)
 
 ; TODO : both filed should be MAP_PRIVATE in mmap:
-			; TODO : PROBLEM -> mmap doesn't work, double check the parametres, and ommit the null-byte-free writing style
-			; ommit the null-byte-free coding style on both this version and the 32 bit one
+; TODO ommit the null-byte-free coding style on both this version and the 32 bit one
+			; TODO : PROBLEM -> find_shell segfaults
 
 STRUC	stat
 	before_size:	resb	48
@@ -172,7 +172,7 @@ mapping:
 	mov r12, MAP_PRIVATE
 	mov r13, [elf_fd]
 	call mmap
-	mov [elf_data], eax
+	mov [elf_data], rax
 
 	cmp rax, -1			; this can't be replaced with a test rax, rax
 	; if we jumped to mmap_err we have to figure out if we mapped any of the files correctly so
@@ -425,7 +425,7 @@ open:	; int open(char *file, int flags);
 mmap:	; void* mmap(QWORD size, int flags, int fd);
 
 	; TODO : this function might have some pre-syscall problem (idk, just make sure in case)
-	xor eax, 9			; sys_mmap
+	mov eax, 9			; sys_mmap
 
 	mov edx, PROT_READ_WRITE	; the whole goal is to be able to edit both files in memory
 	xor edi, edi			; the kernel is free to map at any random addres
@@ -761,11 +761,12 @@ get_file_size:	; size_t get_file_size(int fd);
 	sub rsp, stat_size
 
 	mov eax, 5		; sys_newfstat
-	mov esi, r11d
-	mov rdi, rsp
+	mov edi, r11d
+	mov rsi, rsp
+
 	syscall
 
-	mov rax, [rcx + st_size]
+	mov rax, [rsi + st_size]
 	add rsp, stat_size	; remove the structure of the stack
 
 	test rax, rax
