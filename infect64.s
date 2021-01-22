@@ -425,16 +425,14 @@ open:	; int open(char *file, int flags);
 mmap:	; void* mmap(QWORD size, int flags, int fd);
 
 	; TODO : this function might have some pre-syscall problem (idk, just make sure in case)
-	xor eax, eax
+	xor eax, 9			; sys_mmap
 
-	xor edx, edx
+	mov edx, PROT_READ_WRITE	; the whole goal is to be able to edit both files in memory
 	xor edi, edi			; the kernel is free to map at any random addres
 	mov rsi, r11			; file size
-	mov r10, r10			; flags
+	mov r10, r12			; flags
 	mov r8, r13			; file descriptor
 	xor r9, r9			; offset
-	add al, 9			; sys_mmap
-	add dl, PROT_READ_WRITE		; the whole goal is to be able to edit both files in memory
 	syscall
 
 	mov rbx, rax
