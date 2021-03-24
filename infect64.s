@@ -643,7 +643,7 @@ find_shell:	; void *find_shell(void *data, size_t shellcode_size); returns a poi
 
 	; taking care of the generic section pointer
 	mov rdi, [r11 + e_shoff]
-	add rdx, r11
+	add rdi, r11
 
 	;; getting a pointer to the string table section into rdx
 	mov ax, word[r11 + e_shstrndx]
