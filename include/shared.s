@@ -30,7 +30,15 @@
 %define PT_LOAD 1
 
 ;segment header flags
-%define PF_X 1
+%define	PF_X 1
+
+; interrupts
+%define SYS_WRITE	0x4
+%define	SYS_OPEN	0x5
+%define	SYS_MMAP_PGOFF	0xc0
+%define SYS_MUNMAP	0x5b
+%define SYS_CLOSE	0x6
+%define	SYS_NEW_FSTAT	0x6c
 
 ;errno values
 %define SUCCESS		0
