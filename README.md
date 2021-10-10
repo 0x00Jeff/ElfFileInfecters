@@ -2,21 +2,15 @@
 
 a basic x86 elf file infector written in pure x86 assembly, using the Segment padding infection thechnique along with finding in-segment null-byte blocks
 
-## assembling commands
+## assembling 
 
-first you want to `. asmrc` or append the content of that file to your `~/.bashrc` or `~/.zshrc` or whatever file your shell uses
-
-then build the infector executable using
+to build the needed binaries, simply execute
 
 ```
-asm infect.s
+make
 ```
 
-and the payload file using
-
-```
-asm elf.s
-```
+this will build both the infector and the payload binaries
 
 ## requirements
 
